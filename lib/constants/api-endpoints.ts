@@ -1,0 +1,58 @@
+export const API_ENDPOINTS = {
+  AUTH: {
+    LOGIN_EMAIL_OTP_SEND: "/auth/login/email-otp/send",
+    LOGIN_EMAIL_OTP_VERIFY: "/auth/login/email-otp/verify",
+    REFRESH_TOKEN: "/auth/refresh-token",
+    ME: "/auth/me",
+    LOGOUT: "/auth/logout",
+  },
+  LOCATION: {
+    SEARCH_PINCODE: "/location/pincode/search",
+    AREAS_BY_PINCODE: (pincode: string) => `/location/pincode/${pincode}/areas`,
+    RESOLVE_STORE: "/location/resolve-store",
+    GEOCODE: "/location/geocode",
+  },
+  CATALOG: {
+    CATEGORIES: "/catalog/categories",
+    PRODUCTS: "/catalog/products",
+    PRODUCT_DETAIL: (slug: string) => `/catalog/products/${slug}`,
+  },
+  CART: {
+    MY: "/cart/my",
+    ITEMS: "/cart/items",
+    ITEM: (itemId: string) => `/cart/items/${itemId}`,
+    SAVE_FOR_LATER: (itemId: string) => `/cart/items/${itemId}/save-for-later`,
+    MOVE_TO_CART: (itemId: string) => `/cart/items/${itemId}/move-to-cart`,
+    VALIDATE_CHECKOUT: "/cart/validate-checkout",
+    ESTIMATE_SHIPPING: "/cart/estimate-shipping",
+    CLEAR: "/cart/clear",
+    MERGE: "/cart/merge",
+    APPLY_COUPON: "/cart/apply-coupon",
+    REMOVE_COUPON: "/cart/remove-coupon",
+    SYNC: "/cart/sync",
+  },
+  ORDERS: {
+    LIST: "/orders",
+    DETAIL: (orderId: string) => `/orders/${orderId}`,
+    CREATE: "/orders",
+    CANCEL: (orderId: string) => `/orders/${orderId}/cancel`,
+  },
+  COUPONS: {
+    LIST: "/coupons",
+    ELIGIBILITY: (couponId: string) => `/coupons/${couponId}/eligibility`,
+    VALIDATE: "/coupons/validate",
+    APPLY: "/coupons/apply",
+    ROLLBACK: "/coupons/rollback",
+    MY_USAGES: "/coupons/usages/my",
+  },
+  PAYMENTS: {
+    INTENT: "/payments/intent",
+    VERIFY: "/payments/verify",
+    LIST: "/payments",
+    DETAIL: (paymentId: string) => `/payments/${paymentId}`,
+  },
+  CHECKOUT: {
+    PAYMENT_INTENT: (checkoutId: string) => `/checkout/${checkoutId}/payment-intent`,
+    VERIFY_PAYMENT: (checkoutId: string) => `/checkout/${checkoutId}/verify-payment`,
+  },
+} as const;

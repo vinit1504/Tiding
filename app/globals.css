@@ -1,0 +1,175 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.never-match-dark));
+
+@theme {
+  --font-sans: var(--font-poppins), "Poppins", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-poppins: var(--font-poppins), "Poppins", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+    font-family: var(--font-poppins), "Poppins", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    /* Brand */
+    --primary: #18A818;
+    --primary-hover: #148F14;
+    --primary-light: #EAF8EA;
+
+    --secondary: #78D808;
+    --secondary-hover: #67B907;
+    --secondary-light: #F1FBD9;
+
+    --brand-navy: #081828;
+    --brand-green-dark: #087838;
+
+    /* Background */
+    --background: #F8FAF7;
+    --surface: #FFFFFF;
+    --surface-secondary: #F3F7F1;
+    --surface-hover: #EBF2E9;
+
+    /* Text */
+    --text-primary: #10251A;
+    --text-secondary: #64746A;
+    --text-muted: #94A29A;
+
+    /* Borders - NOT BLACK */
+    --border: #E2EAE2;
+    --border-light: #EDF2ED;
+
+    /* States */
+    --success: #18A818;
+    --warning: #F4B740;
+    --error: #E5484D;
+    --info: #2488C9;
+
+    /* Radius */
+    --radius: 0.5rem;
+  }
+}
+
+* {
+  border-color: var(--border);
+}
+
+html,
+body {
+  font-family: var(--font-poppins), "Poppins", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: var(--background);
+  color: var(--text-primary);
+  font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+h1, h2, h3, h4, h5, h6, p, span, div, a, button, input, select, textarea, label {
+  font-family: inherit;
+}
+
+input:focus,
+input:focus-visible {
+  outline: none !important;
+}
+
+/* Custom scrollbars with brand tones */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Circular Theme-Transition Ripple */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  z-index: 9999;
+}
+
+/* Drawer / Slide-Over Keyframe Animations */
+@keyframes drawerFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes drawerFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes drawerSlideInRight {
+  from {
+    transform: translate3d(100%, 0, 0);
+    opacity: 0;
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+  }
+}
+
+@keyframes drawerSlideOutRight {
+  from {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+  }
+  to {
+    transform: translate3d(100%, 0, 0);
+    opacity: 0;
+  }
+}
+
+.drawer-overlay[data-state="open"] {
+  animation: drawerFadeIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.drawer-overlay[data-state="closed"] {
+  animation: drawerFadeOut 0.25s cubic-bezier(0.32, 0, 0.67, 0) forwards;
+}
+
+.drawer-content-right[data-state="open"] {
+  animation: drawerSlideInRight 0.38s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.drawer-content-right[data-state="closed"] {
+  animation: drawerSlideOutRight 0.28s cubic-bezier(0.32, 0, 0.67, 0) forwards;
+}
+
+/* Ensure Sonner toast notifications use Poppins font family */
+[data-sonner-toaster],
+[data-sonner-toaster] *,
+[data-sonner-toast],
+[data-sonner-toast] [data-title],
+[data-sonner-toast] [data-description],
+[data-sonner-toast] [data-button],
+[data-sonner-toast] [data-cancel] {
+  font-family: var(--font-poppins), "Poppins", system-ui, -apple-system, sans-serif !important;
+}
+
