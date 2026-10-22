@@ -173,3 +173,38 @@ input:focus-visible {
   font-family: var(--font-poppins), "Poppins", system-ui, -apple-system, sans-serif !important;
 }
 
+/* Dual Ring Loader (with cuts & opposite spin) */
+.dual-ring-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dual-ring {
+  position: absolute;
+  border-radius: 50%;
+  border-style: solid;
+  border-color: transparent;
+}
+
+.dual-ring-outer {
+  border-top-color: var(--primary, #18A818);
+  border-right-color: var(--primary, #18A818);
+  opacity: 0.9;
+  animation: dualRingSpin 1.1s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+}
+
+.dual-ring-inner {
+  border-bottom-color: var(--secondary, #78D808);
+  border-left-color: var(--secondary, #78D808);
+  opacity: 0.75;
+  animation: dualRingSpin 0.85s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite reverse;
+}
+
+@keyframes dualRingSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+

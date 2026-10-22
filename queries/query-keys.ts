@@ -28,6 +28,11 @@ export const QUERY_KEYS = {
     ALL: ["cart"] as const,
     DETAIL: () => [...QUERY_KEYS.CART.ALL, "detail"] as const,
   },
+  CHECKOUT: {
+    ALL: ["checkout"] as const,
+    ACTIVE: () => [...QUERY_KEYS.CHECKOUT.ALL, "active"] as const,
+    DETAIL: (checkoutId: string) => [...QUERY_KEYS.CHECKOUT.ALL, "detail", checkoutId] as const,
+  },
   ORDERS: {
     ALL: ["orders"] as const,
     LIST: (page = 1, limit = 20) => [...QUERY_KEYS.ORDERS.ALL, "list", { page, limit }] as const,
@@ -41,6 +46,7 @@ export const QUERY_KEYS = {
   AUTH: {
     ALL: ["auth"] as const,
     SESSION: () => [...QUERY_KEYS.AUTH.ALL, "session"] as const,
+    SESSIONS: () => [...QUERY_KEYS.AUTH.ALL, "device-sessions"] as const,
   },
   COUPONS: {
     ALL: ["coupons"] as const,
@@ -52,5 +58,16 @@ export const QUERY_KEYS = {
     ALL: ["payments"] as const,
     LIST: () => [...QUERY_KEYS.PAYMENTS.ALL, "list"] as const,
     DETAIL: (paymentId: string) => [...QUERY_KEYS.PAYMENTS.ALL, "detail", paymentId] as const,
+  },
+  WISHLISTS: {
+    ALL: ["wishlists"] as const,
+    MY: () => [...QUERY_KEYS.WISHLISTS.ALL, "my"] as const,
+    DEFAULT: () => [...QUERY_KEYS.WISHLISTS.ALL, "default"] as const,
+    DETAIL: (id: string) => [...QUERY_KEYS.WISHLISTS.ALL, "detail", id] as const,
+  },
+  REVIEWS: {
+    ALL: ["reviews"] as const,
+    PRODUCT: (productId: string) => [...QUERY_KEYS.REVIEWS.ALL, "product", productId] as const,
+    MY: () => [...QUERY_KEYS.REVIEWS.ALL, "my"] as const,
   },
 } as const;

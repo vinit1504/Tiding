@@ -111,16 +111,17 @@ export function useCart() {
         (item) =>
           item.cartItemId === identifier ||
           item.id === identifier ||
-          item.variantId === identifier ||
-          item.productId === identifier
+          (item.variantId && item.variantId === identifier) ||
+          (!item.variantId && item.productId === identifier)
       );
 
+      const hasVariant = !!targetItem?.variantId && targetItem.variantId !== targetItem.productId;
       const canonicalKey =
         registerItemKeys([
           targetItem?.cartItemId,
           targetItem?.variantId,
-          targetItem?.productId,
           targetItem?.id,
+          !hasVariant ? targetItem?.productId : undefined,
           identifier,
         ]) || identifier;
 
@@ -135,20 +136,22 @@ export function useCart() {
       // Mark IDs as removed so in-flight responses don't resurrect this item
       if (targetItem?.cartItemId) markItemAsRemoved(targetItem.cartItemId);
       if (targetItem?.variantId) markItemAsRemoved(targetItem.variantId);
-      if (targetItem?.productId) markItemAsRemoved(targetItem.productId);
+      if (!hasVariant && targetItem?.productId) markItemAsRemoved(targetItem.productId);
       if (targetItem?.id) markItemAsRemoved(targetItem.id);
       if (identifier) markItemAsRemoved(identifier);
 
       // Instant optimistic local removal (0ms)
       setCartItems((prev) =>
-        prev.filter(
-          (item) =>
-            item.cartItemId !== identifier &&
-            item.id !== identifier &&
-            item.variantId !== identifier &&
-            item.productId !== identifier &&
-            getCanonicalKey(item.cartItemId || item.variantId || item.id) !== canonicalKey
-        )
+        prev.filter((item) => {
+          if (targetItem && item === targetItem) return false;
+          if (item.cartItemId && item.cartItemId === identifier) return false;
+          if (item.id === identifier) return false;
+          if (item.variantId && item.variantId === identifier) return false;
+          if (!hasVariant && !item.variantId && item.productId === identifier) return false;
+          const key = item.cartItemId || item.variantId || item.id;
+          if (getCanonicalKey(key) === canonicalKey) return false;
+          return true;
+        })
       );
 
       toast.success(`Removed ${targetItem?.name || "item"} from cart`);
@@ -175,16 +178,17 @@ export function useCart() {
         (item) =>
           item.cartItemId === identifier ||
           item.id === identifier ||
-          item.variantId === identifier ||
-          item.productId === identifier
+          (item.variantId && item.variantId === identifier) ||
+          (!item.variantId && item.productId === identifier)
       );
 
+      const hasVariant = !!targetItem?.variantId && targetItem.variantId !== targetItem.productId;
       const canonicalKey =
         registerItemKeys([
           targetItem?.cartItemId,
           targetItem?.variantId,
-          targetItem?.productId,
           targetItem?.id,
+          !hasVariant ? targetItem?.productId : undefined,
           identifier,
         ]) || identifier;
 
@@ -196,10 +200,11 @@ export function useCart() {
       setCartItems((prev) =>
         prev.map((item) => {
           const isMatch =
+            (targetItem && item === targetItem) ||
             (item.cartItemId && item.cartItemId === identifier) ||
             item.id === identifier ||
             (item.variantId && item.variantId === identifier) ||
-            (item.productId && item.productId === identifier) ||
+            (!hasVariant && !item.variantId && item.productId === identifier) ||
             getCanonicalKey(item.cartItemId || item.variantId || item.id) === canonicalKey;
 
           if (isMatch) {
@@ -229,8 +234,8 @@ export function useCart() {
           (item) =>
             item.cartItemId === identifier ||
             item.id === identifier ||
-            item.variantId === identifier ||
-            item.productId === identifier ||
+            (item.variantId && item.variantId === identifier) ||
+            (!hasVariant && !item.variantId && item.productId === identifier) ||
             getCanonicalKey(item.cartItemId || item.variantId || item.id) === canonicalKey
         );
 
@@ -272,13 +277,15 @@ export function useCart() {
             pendingQuantities.delete(canonicalKey);
             if (summary?.active_items) {
               const serverMatch = summary.active_items.find(
-                (si: any) => si.variant_id === variantId || si.product_id === latestItem?.productId
+                (si: any) =>
+                  (hasVariant && (si.variant_id === variantId || si.id === variantId)) ||
+                  (!hasVariant && (si.product_id === latestItem?.productId || si.variant_id === variantId || si.id === variantId))
               );
               if (serverMatch) {
-                registerItemKeys([serverMatch.id, variantId, latestItem?.productId]);
+                registerItemKeys([serverMatch.id, variantId]);
                 setCartItems((prev) =>
                   prev.map((it) =>
-                    it.variantId === variantId || it.productId === latestItem?.productId
+                    (hasVariant ? (it.variantId === variantId || it.id === variantId) : (it.productId === latestItem?.productId || it.id === variantId))
                       ? { ...it, cartItemId: serverMatch.id }
                       : it
                   )
@@ -306,24 +313,50 @@ export function useCart() {
       customAttributes?: CartItemCustomAttributes
     ) => {
       const product = "product" in productOrVariant ? productOrVariant.product : productOrVariant;
-      const variant = "product" in productOrVariant ? productOrVariant.variant : undefined;
+      const variant =
+        "product" in productOrVariant
+          ? productOrVariant.variant
+          : (product as any).selected_variant ||
+            (product as any).default_variant ||
+            (product.variants && product.variants.length > 0 ? product.variants[0] : undefined);
 
-      const variantId = variant?.id || (product as any).variantId || (product as any).variants?.[0]?.id || product.id;
-      const price = variant?.price ?? product.price;
-      const mrp = variant?.mrp ?? product.mrp;
-      const unit = variant?.unit ?? product.unit;
-      const name = product.name;
-      const stock = variant?.stock ?? product.stock ?? 20;
+      const rawVariantId = variant?.id || (product as any).variantId;
+      const hasVariant = !!rawVariantId && rawVariantId !== product.id;
+      const lineItemId = rawVariantId || product.id;
 
-      const canonicalKey = registerItemKeys([variantId, product.id]);
+      const price = variant?.selling_price ?? variant?.price ?? product.price;
+      const mrp = variant?.mrp ?? product.mrp ?? price;
+      const variantName = variant?.variant_name || (variant as any)?.name;
+      const unit = variant?.unit || variantName || product.unit || "1 pack";
+      const stock = variant?.stock_quantity ?? variant?.stock ?? product.stock ?? 20;
+
+      // Clean item name incorporating variant if appropriate
+      const displayName =
+        variantName && !product.name.toLowerCase().includes(variantName.toLowerCase())
+          ? `${product.name} (${variantName})`
+          : product.name;
+
+      const canonicalKey = registerItemKeys([
+        lineItemId,
+        !hasVariant ? product.id : undefined,
+      ]);
 
       // If already in basket, delegate to debounced updateQuantity!
-      const existing = cartItems.find(
-        (item) =>
-          item.variantId === variantId ||
-          item.productId === product.id ||
-          getCanonicalKey(item.cartItemId || item.variantId || item.id) === canonicalKey
-      );
+      // Must match specifically by variantId if variants exist so separate variants are NOT collapsed!
+      const existing = cartItems.find((item) => {
+        if (hasVariant) {
+          return (
+            item.variantId === lineItemId ||
+            item.id === lineItemId ||
+            (item.cartItemId && item.cartItemId === lineItemId)
+          );
+        }
+        return (
+          (!item.variantId || item.variantId === product.id) &&
+          (item.productId === product.id || item.id === product.id)
+        );
+      });
+
       if (existing) {
         return updateQuantity(
           existing.cartItemId || existing.variantId || existing.id,
@@ -333,12 +366,12 @@ export function useCart() {
 
       // Optimistic local update for new item (0ms instant response)
       const newItem: CartItem = {
-        id: variantId,
+        id: lineItemId,
         productId: product.id,
-        variantId,
-        name,
+        variantId: hasVariant ? lineItemId : undefined,
+        name: displayName,
         slug: product.slug,
-        image_url: product.image_url,
+        image_url: variant?.image_url || product.image_url,
         unit,
         price,
         mrp,
@@ -348,7 +381,7 @@ export function useCart() {
       };
       setCartItems((prev) => [...prev, newItem]);
 
-      if (!isAuthenticated || !variantId) return;
+      if (!isAuthenticated || !lineItemId) return;
 
       // Debounce backend creation so rapid + clicks coalesce into 1 single call with final quantity!
       const existingTimer = itemDebounceTimers.get(canonicalKey);
@@ -365,23 +398,26 @@ export function useCart() {
 
         try {
           const summary = await addMutation.mutateAsync({
-            variantId,
+            variantId: lineItemId,
             quantity: finalQuantity,
             customAttributes,
           });
           pendingQuantities.delete(canonicalKey);
           if (summary?.active_items) {
             const serverMatch = summary.active_items.find(
-              (si: any) => si.variant_id === variantId || si.product_id === product.id
+              (si: any) =>
+                (hasVariant && (si.variant_id === lineItemId || si.id === lineItemId)) ||
+                (!hasVariant && (si.product_id === product.id || si.variant_id === lineItemId || si.id === lineItemId))
             );
             if (serverMatch) {
-              registerItemKeys([serverMatch.id, variantId, product.id]);
+              registerItemKeys([serverMatch.id, lineItemId]);
               setCartItems((prev) =>
-                prev.map((it) =>
-                  it.variantId === variantId || it.productId === product.id
-                    ? { ...it, cartItemId: serverMatch.id }
-                    : it
-                )
+                prev.map((it) => {
+                  const isThisItem = hasVariant
+                    ? it.variantId === lineItemId || it.id === lineItemId
+                    : it.productId === product.id || it.id === lineItemId;
+                  return isThisItem ? { ...it, cartItemId: serverMatch.id } : it;
+                })
               );
             }
           }
@@ -401,24 +437,37 @@ export function useCart() {
   const saveForLater = useCallback(
     async (identifier: string) => {
       const targetItem = cartItems.find(
-        (item) => item.cartItemId === identifier || item.id === identifier || item.productId === identifier
+        (item) =>
+          item.cartItemId === identifier ||
+          item.id === identifier ||
+          (item.variantId && item.variantId === identifier) ||
+          (!item.variantId && item.productId === identifier)
       );
 
       if (!targetItem) return;
 
+      const hasVariant = !!targetItem.variantId && targetItem.variantId !== targetItem.productId;
+
       // Remove from active cart
       setCartItems((prev) =>
-        prev.filter(
-          (item) =>
-            item.cartItemId !== identifier &&
-            item.id !== identifier &&
-            item.productId !== identifier
-        )
+        prev.filter((item) => {
+          if (item === targetItem) return false;
+          if (item.cartItemId && item.cartItemId === identifier) return false;
+          if (item.id === identifier) return false;
+          if (item.variantId && item.variantId === identifier) return false;
+          if (!hasVariant && !item.variantId && item.productId === identifier) return false;
+          return true;
+        })
       );
 
       // Add to saved for later
       setSavedItems((prev) => {
-        const exists = prev.some((it) => it.id === targetItem.id);
+        const exists = prev.some(
+          (it) =>
+            it.id === targetItem.id ||
+            (it.variantId && it.variantId === targetItem.variantId) ||
+            it.cartItemId === targetItem.cartItemId
+        );
         if (exists) return prev;
         return [...prev, { ...targetItem, isSavedForLater: true }];
       });
@@ -442,27 +491,39 @@ export function useCart() {
   const moveToCart = useCallback(
     async (identifier: string) => {
       const targetItem = savedItems.find(
-        (item) => item.cartItemId === identifier || item.id === identifier || item.productId === identifier
+        (item) =>
+          item.cartItemId === identifier ||
+          item.id === identifier ||
+          (item.variantId && item.variantId === identifier) ||
+          (!item.variantId && item.productId === identifier)
       );
 
       if (!targetItem) return;
 
+      const hasVariant = !!targetItem.variantId && targetItem.variantId !== targetItem.productId;
+
       // Remove from saved for later
       setSavedItems((prev) =>
-        prev.filter(
-          (item) =>
-            item.cartItemId !== identifier &&
-            item.id !== identifier &&
-            item.productId !== identifier
-        )
+        prev.filter((item) => {
+          if (item === targetItem) return false;
+          if (item.cartItemId && item.cartItemId === identifier) return false;
+          if (item.id === identifier) return false;
+          if (item.variantId && item.variantId === identifier) return false;
+          if (!hasVariant && !item.variantId && item.productId === identifier) return false;
+          return true;
+        })
       );
 
       // Add back to active cart
       setCartItems((prev) => {
-        const exists = prev.find((it) => it.id === targetItem.id);
+        const exists = prev.find(
+          (it) =>
+            it.id === targetItem.id ||
+            (it.variantId && targetItem.variantId && it.variantId === targetItem.variantId)
+        );
         if (exists) {
           return prev.map((it) =>
-            it.id === targetItem.id ? { ...it, quantity: it.quantity + 1 } : it
+            it === exists ? { ...it, quantity: it.quantity + 1 } : it
           );
         }
         return [...prev, { ...targetItem, isSavedForLater: false }];

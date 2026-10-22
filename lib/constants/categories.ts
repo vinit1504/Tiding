@@ -290,5 +290,13 @@ export const TIDING_HOME_CATEGORIES: TidingCategoryItem[] = [
     bgColor: "#FBF2E8",
     icon: "🐾",
   },
+  {
+    id: "tiding-pooja",
+    name: "Pooja Needs",
+    slug: "pooja-needs",
+    image: "https://images.unsplash.com/photo-1608686207856-001b95cf60ca?w=240&auto=format&fit=crop&q=80",
+    bgColor: "#FFF7ED",
+    icon: "🪔",
+  },
 ];
 

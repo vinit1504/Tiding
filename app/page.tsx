@@ -115,7 +115,7 @@ export default function HomePage() {
                 key={shelf.categorySlug}
                 title={shelf.categoryName}
                 categorySlug={shelf.categorySlug}
-                subtitle="Fresh essentials delivered in 10 minutes"
+                subtitle="Fresh essentials with express doorstep delivery"
                 products={shelf.products}
               />
             ))}

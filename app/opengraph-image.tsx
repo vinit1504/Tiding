@@ -2,7 +2,7 @@ import { ImageResponse } from "next/og";
 import { SITE_CONFIG } from "@/lib/constants/site-config";
 
 export const runtime = "edge";
-export const alt = "Tiding - 10-Minute Grocery Delivery";
+export const alt = "Tiding - Instant Grocery Delivery";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -69,7 +69,7 @@ export default async function Image() {
               borderRadius: "20px",
             }}
           >
-            10-Min Express Delivery
+            Express Doorstep Delivery
           </div>
         </div>
 
@@ -87,7 +87,7 @@ export default async function Image() {
             Fresh Groceries, Fruits & Vegetables Delivered to Your Door
           </h1>
           <p style={{ fontSize: "24px", color: "#94A3B8", margin: 0 }}>
-            Farm fresh harvests, daily milk, dairy, bakery & instant pantry staples in 10 minutes.
+            Farm fresh harvests, daily milk, dairy, bakery & instant pantry staples delivered fresh.
           </p>
         </div>
 

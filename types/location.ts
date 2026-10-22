@@ -5,6 +5,7 @@ export interface GeoCoordinates {
 
 export interface DeliveryLocation {
   id?: string;
+  areaId?: string;
   area: string; // e.g. "Shop no. 1, Kahan Park, nr. Varachha"
   society?: string; // Society / Apartment / Building name
   houseNo?: string; // House / Flat / Shop number

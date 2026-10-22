@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { CatalogSubcategory } from "@/types/catalog";
 import { cn } from "@/lib/utils";
-import { getCategoryFallbackMeta } from "@/lib/utils/image-fallback";
+import { getCategoryFallbackMeta, sanitizeImageUrl } from "@/lib/utils/image-fallback";
 
 interface SubcategorySidebarProps {
   subcategories: CatalogSubcategory[];
@@ -28,8 +28,7 @@ function SubcategoryItemButton({
 }) {
   const [hasError, setHasError] = useState(false);
   const fallback = getCategoryFallbackMeta(sub.name, sub.slug);
-  const cleanImage =
-    sub.image_url && sub.image_url.trim() !== "" ? sub.image_url.trim() : null;
+  const cleanImage = sanitizeImageUrl(sub.image_url);
   const shouldShowImage = cleanImage && !hasError;
 
   return (

@@ -1,92 +1,196 @@
 import React from "react";
-import Image from "next/image";
-import Link from "next/link";
 import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
 import { catalogService, isUuid } from "@/lib/api/catalog-service";
 import { ProductJsonLd } from "@/components/seo/product-json-ld";
 import { BreadcrumbJsonLd } from "@/components/seo/breadcrumb-json-ld";
-import { ProductCard } from "@/components/product/product-card";
+import { ProductDetailView } from "@/components/product/product-detail-view";
 import { formatCurrency } from "@/lib/utils";
 import { SITE_CONFIG } from "@/lib/constants/site-config";
-import { Zap, ShieldCheck, Award, Star, Truck, ArrowLeft, Package } from "lucide-react";
-import { SafeImage } from "@/components/ui/safe-image";
 import { Product } from "@/types/product";
 import type { Metadata } from "next";
 
-export async function generateMetadata({
-  params,
-}: {
+type PageProps = {
   params: Promise<{ slug: string }>;
-}): Promise<Metadata> {
+  searchParams: Promise<{ variant?: string; variantId?: string }>;
+};
+
+const DEFAULT_DARK_STORE_ID = "2a6ba8df-637f-4939-bc17-69ad6832c050";
+
+const calcDiscount = (price: number, mrp: number) =>
+  mrp > price ? Math.round(((mrp - price) / mrp) * 100) : 0;
+
+function pickVariant(raw: any, variantId?: string) {
+  const list: any[] = raw.variants ?? [];
+  return (
+    list.find((v) => v.id === variantId) ||
+    raw.selected_variant ||
+    raw.default_variant ||
+    list[0] ||
+    null
+  );
+}
+
+// ---------- metadata ----------
+export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const product = await catalogService.getProductByIdOrSlug(slug);
-  if (!product) return { title: "Product Not Found" };
+  const sParams = await searchParams;
+  const variantParam = sParams.variantId || sParams.variant;
+  const cookieStore = await cookies();
+  const storeId = cookieStore.get("tiding_store_id")?.value || DEFAULT_DARK_STORE_ID;
+  const raw: any = await catalogService.getProductByIdOrSlug(slug, storeId, variantParam);
+  if (!raw) return { title: "Product Not Found" };
+
+  const v = pickVariant(raw, variantParam);
+  const price = v?.selling_price ?? raw.price;
 
   return {
-    title: `${product.name} (${product.unit}) - ${formatCurrency(product.price)}`,
-    description: product.description,
+    title: `${raw.name}${v?.variant_name ? ` (${v.variant_name})` : ""} - ${formatCurrency(price)} | ${SITE_CONFIG.name}`,
+    description: raw.description,
     openGraph: {
-      title: `${product.name} | ${SITE_CONFIG.name}`,
-      description: product.description,
-      images: [{ url: product.image_url }],
+      title: `${raw.name} | ${SITE_CONFIG.name}`,
+      description: raw.description,
+      images: raw.image_url ? [{ url: raw.image_url }] : [],
     },
   };
 }
 
-export default async function ProductDetailPage({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}) {
+// ---------- page ----------
+export default async function ProductDetailPage({ params, searchParams }: PageProps) {
   const { slug } = await params;
-  const rawProduct = await catalogService.getProductByIdOrSlug(slug);
+  const sParams = await searchParams;
+  const variantParam = sParams.variantId || sParams.variant;
 
-  if (!rawProduct) {
-    notFound();
-  }
+  const cookieStore = await cookies();
+  const storeId = cookieStore.get("tiding_store_id")?.value || DEFAULT_DARK_STORE_ID;
 
-  const brandName = typeof rawProduct.brand === "string" ? rawProduct.brand : rawProduct.brand?.name || "Tiding";
+  // 1. Fetch product with variant resolution from backend with x-store-id
+  const raw: any = await catalogService.getProductByIdOrSlug(slug, storeId, variantParam);
+  if (!raw) notFound();
+
+  const brandName = typeof raw.brand === "string" ? raw.brand : raw.brand?.name || "Tiding";
+  const variants: any[] = raw.variants ?? [];
+  const selected = pickVariant(raw, variantParam);
+
+  // price / stock come from the resolved selected variant
+  const price = selected?.selling_price ?? raw.price;
+  const mrp = selected?.mrp ?? raw.mrp ?? price;
+
+  const rawStock = selected?.stock_quantity ?? selected?.stock ?? raw.stock_quantity ?? raw.stock;
+  const stock = typeof rawStock === "number" && !isNaN(rawStock) && rawStock > 0 ? rawStock : (raw.stock ?? 100);
+
+  const isExplicitlyOOS =
+    selected?.is_in_stock === false ||
+    selected?.is_available === false ||
+    selected?.isAvailable === false ||
+    raw.is_in_stock === false ||
+    raw.is_available === false ||
+    raw.isAvailable === false ||
+    (typeof rawStock === "number" && rawStock <= 0);
+
+  const inStock = !isExplicitlyOOS;
+  const unit = selected?.variant_name || selected?.unit || raw.unit || "1 pack";
+  const discountPercentage = calcDiscount(price, mrp);
+
   const product: Product = {
-    id: rawProduct.id,
-    name: rawProduct.name,
-    slug: rawProduct.slug,
+    id: raw.id,
+    name: raw.name,
+    slug: raw.slug,
     brand: brandName,
-    description: rawProduct.description || "",
-    image_url: rawProduct.image_url,
-    category_id: rawProduct.category_id || "",
-    category_name: rawProduct.category_name || "Daily Essentials",
-    category_slug: rawProduct.category_slug || "essentials",
-    subcategory_id: rawProduct.subcategory_id || "",
-    subcategory_name: rawProduct.subcategory_name || "",
-    price: rawProduct.price,
-    mrp: rawProduct.mrp,
-    discountPercentage: rawProduct.discountPercentage || 0,
-    unit: rawProduct.unit || "1 pack",
-    stock: rawProduct.stock,
-    isAvailable: rawProduct.isAvailable,
-    deliveryEtaMinutes: rawProduct.deliveryEtaMinutes || 8,
-    rating: rawProduct.rating || 4.8,
-    ratingCount: rawProduct.ratingCount || 120,
-    variants: rawProduct.variants?.map((v) => ({
-      id: v.id,
-      sku: v.sku,
-      unit: v.variant_name || v.unit || "1 pack",
-      price: v.selling_price,
-      mrp: v.mrp,
-      stock: v.stock_quantity || 10,
-      isAvailable: v.is_available ?? true,
-    })),
+    description: raw.description || "",
+    image_url: raw.image_url,
+    images: Array.isArray(raw.images) && raw.images.length > 0
+      ? raw.images
+      : raw.image_url
+      ? [raw.image_url]
+      : [],
+    category_id: raw.category_id || "",
+    category_name: raw.category_name || "Daily Essentials",
+    category_slug: raw.category_slug || "essentials",
+    subcategory_id: raw.subcategory_id || "",
+    subcategory_name: raw.subcategory_name || "",
+    price,
+    mrp,
+    discountPercentage,
+    unit,
+    stock,
+    isAvailable: inStock,
+    deliveryEtaMinutes: raw.deliveryEtaMinutes || 8,
+    rating: raw.rating || 4.8,
+    ratingCount: raw.ratingCount || 120,
+    selected_variant: selected
+      ? {
+          id: selected.id,
+          sku: selected.sku,
+          unit: selected.variant_name || selected.unit || unit,
+          variant_name: selected.variant_name || unit,
+          price: Number(selected.selling_price ?? price),
+          selling_price: Number(selected.selling_price ?? price),
+          mrp: Number(selected.mrp ?? mrp),
+          stock: typeof selected.stock_quantity === "number" ? selected.stock_quantity : stock,
+          stock_quantity: typeof selected.stock_quantity === "number" ? selected.stock_quantity : stock,
+          isAvailable: selected.is_in_stock !== false && selected.is_available !== false && inStock,
+          is_in_stock: selected.is_in_stock !== false && selected.is_available !== false && inStock,
+          image_url: selected.image_url || raw.image_url,
+          attributes: selected.attributes,
+        }
+      : undefined,
+    default_variant: raw.default_variant
+      ? {
+          id: raw.default_variant.id,
+          sku: raw.default_variant.sku,
+          unit: raw.default_variant.variant_name || raw.default_variant.unit || unit,
+          variant_name: raw.default_variant.variant_name || unit,
+          price: Number(raw.default_variant.selling_price ?? price),
+          selling_price: Number(raw.default_variant.selling_price ?? price),
+          mrp: Number(raw.default_variant.mrp ?? mrp),
+          stock: typeof raw.default_variant.stock_quantity === "number" ? raw.default_variant.stock_quantity : stock,
+          stock_quantity: typeof raw.default_variant.stock_quantity === "number" ? raw.default_variant.stock_quantity : stock,
+          isAvailable: raw.default_variant.is_in_stock !== false && raw.default_variant.is_available !== false && inStock,
+          is_in_stock: raw.default_variant.is_in_stock !== false && raw.default_variant.is_available !== false && inStock,
+          image_url: raw.default_variant.image_url || raw.image_url,
+          attributes: raw.default_variant.attributes,
+        }
+      : undefined,
+    variants: variants.map((v) => {
+      const vStockRaw = v.stock_quantity ?? v.stock;
+      const vStock = typeof vStockRaw === "number" && !isNaN(vStockRaw) && vStockRaw > 0 ? vStockRaw : stock;
+      const vIsOOS =
+        v.is_in_stock === false ||
+        v.is_available === false ||
+        v.isAvailable === false ||
+        v.status === "INACTIVE" ||
+        (typeof vStockRaw === "number" && vStockRaw <= 0);
+
+      return {
+        id: v.id,
+        sku: v.sku,
+        unit: v.variant_name || v.unit || "1 pack",
+        variant_name: v.variant_name || v.unit || "1 pack",
+        price: Number(v.selling_price ?? v.price ?? price),
+        selling_price: Number(v.selling_price ?? v.price ?? price),
+        mrp: Number(v.mrp ?? mrp),
+        stock: vStock,
+        stock_quantity: vStock,
+        isAvailable: !vIsOOS,
+        is_in_stock: !vIsOOS,
+        image_url: v.image_url || raw.image_url,
+        attributes: v.attributes,
+      };
+    }),
+    attributes: selected?.attributes ?? raw.attributes ?? [],
   };
 
-  const allCategoryProducts = await catalogService.getProducts({
+  // 2. Fetch similar products in category for recommendations
+  const categoryProducts = await catalogService.getProducts({
     category_id: isUuid(product.category_id) ? product.category_id : undefined,
     limit: 10,
   });
 
-  const relatedProducts: Product[] = allCategoryProducts
-    .filter((p) => p.id !== product.id)
+  const relatedProducts: Product[] = categoryProducts
+    .filter((p: any) => p.id !== product.id)
     .slice(0, 5)
-    .map((p) => ({
+    .map((p: any) => ({
       id: p.id,
       name: p.name,
       slug: p.slug,
@@ -110,8 +214,7 @@ export default async function ProductDetailPage({
     }));
 
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 py-6 space-y-10">
-      {/* Schema.org Structured Data */}
+    <>
       <ProductJsonLd product={product} />
       <BreadcrumbJsonLd
         items={[
@@ -120,147 +223,11 @@ export default async function ProductDetailPage({
           { name: product.name, url: `/product/${product.slug}` },
         ]}
       />
-
-      {/* Back Button */}
-      <Link
-        href={`/category/${product.category_slug}`}
-        className="inline-flex items-center gap-1.5 text-xs font-bold text-[var(--text-secondary)] hover:text-[#18A818] transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        <span>Back to {product.category_name}</span>
-      </Link>
-
-      {/* Product Detail Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12">
-        {/* Left: Product Media Gallery */}
-        <div className="relative aspect-square w-full rounded-3xl overflow-hidden bg-[var(--surface-secondary)]/50 border border-[var(--border)] shadow-xs">
-          {product.discountPercentage > 0 && (
-            <span className="absolute left-4 top-4 z-10 rounded-xl bg-[#18A818] px-3 py-1 text-xs font-black uppercase tracking-wider text-white shadow-md">
-              {product.discountPercentage}% OFF
-            </span>
-          )}
-          <span className="absolute right-4 top-4 z-10 flex items-center gap-1.5 rounded-xl bg-black/70 backdrop-blur-md px-3 py-1 text-xs font-bold text-white">
-            <Zap className="h-3.5 w-3.5 text-amber-400 fill-amber-400" />
-            10 MINS DELIVERY
-          </span>
-          <SafeImage
-            src={product.image_url}
-            alt={product.name}
-            fill
-            priority
-            sizes="(max-width: 768px) 100vw, 50vw"
-            className="object-contain p-6"
-            fallback={
-              <div className="w-full h-full flex flex-col items-center justify-center bg-slate-50 dark:bg-neutral-900 text-slate-400 select-none p-6 text-center">
-                <div className="h-20 w-20 rounded-full bg-slate-100 dark:bg-neutral-800 flex items-center justify-center mb-3">
-                  <Package className="h-10 w-10 text-slate-300 dark:text-neutral-600 stroke-[1.5]" />
-                </div>
-                <p className="text-sm font-bold text-slate-500">Image not available</p>
-                <p className="text-xs text-slate-400 mt-1">{product.name}</p>
-              </div>
-            }
-          />
-        </div>
-
-        {/* Right: Product Buy Box & Details */}
-        <div className="flex flex-col justify-between space-y-6">
-          <div className="space-y-4">
-            {/* Category / Brand Badge */}
-            <div className="flex items-center gap-2">
-              <span className="rounded-full bg-[var(--surface-secondary)] px-2.5 py-0.5 text-xs font-bold text-[var(--text-secondary)] border border-[var(--border)]">
-                {product.brand || product.category_name}
-              </span>
-              {product.badge && (
-                <span className="rounded-full bg-[#18A818]/15 px-2.5 py-0.5 text-xs font-bold text-[#18A818]">
-                  {product.badge}
-                </span>
-              )}
-            </div>
-
-            {/* Title & Unit */}
-            <h1 className="text-2xl sm:text-3xl font-black text-[var(--text-primary)] tracking-tight leading-snug">
-              {product.name}
-            </h1>
-            <p className="text-sm font-semibold text-[var(--text-muted)]">
-              Net Quantity: <span className="text-[var(--text-primary)]">{product.unit}</span>
-            </p>
-
-            {/* Rating */}
-            {(product.rating || 0) > 0 && (
-              <div className="flex items-center gap-2 text-xs">
-                <div className="flex items-center gap-1 rounded-lg bg-amber-500/15 px-2 py-1 font-bold text-amber-700 dark:text-amber-400">
-                  <Star className="h-3.5 w-3.5 fill-current" />
-                  <span>{product.rating}</span>
-                </div>
-                <span className="text-[var(--text-muted)]">({product.ratingCount || 120} verified ratings)</span>
-              </div>
-            )}
-
-            {/* Pricing Box */}
-            <div className="flex items-baseline gap-3 pt-2">
-              <span className="text-3xl font-black text-[var(--text-primary)]">
-                {formatCurrency(product.price)}
-              </span>
-              {product.mrp > product.price && (
-                <span className="text-base text-[var(--text-muted)] line-through">
-                  MRP {formatCurrency(product.mrp)}
-                </span>
-              )}
-              {product.discountPercentage > 0 && (
-                <span className="text-xs font-black text-[#18A818] bg-[#18A818]/10 px-2 py-0.5 rounded-full">
-                  Save {formatCurrency(product.mrp - product.price)}
-                </span>
-              )}
-            </div>
-            <p className="text-[11px] text-[var(--text-muted)]">
-              (Inclusive of all taxes)
-            </p>
-
-            {/* Add to Cart Stepper Box */}
-            <div className="pt-4 max-w-sm">
-              <ProductCard product={product} />
-            </div>
-
-            {/* Delivery Guarantee Highlights */}
-            <div className="grid grid-cols-2 gap-3 pt-4 border-t border-[var(--border-light)] text-xs">
-              <div className="flex items-center gap-2.5 rounded-xl border border-[var(--border)] p-3">
-                <Truck className="h-5 w-5 text-[#18A818] shrink-0" />
-                <div>
-                  <p className="font-bold text-[var(--text-primary)]">10-15 Min Delivery</p>
-                  <p className="text-[10px] text-[var(--text-muted)]">From dark store near you</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2.5 rounded-xl border border-[var(--border)] p-3">
-                <ShieldCheck className="h-5 w-5 text-[#18A818] shrink-0" />
-                <div>
-                  <p className="font-bold text-[var(--text-primary)]">Best Quality</p>
-                  <p className="text-[10px] text-[var(--text-muted)]">100% genuine products</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Description & Details Tab Section */}
-      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 space-y-4">
-        <h2 className="text-base font-bold text-[var(--text-primary)]">About the Product</h2>
-        <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-          {product.description || "Fresh and verified quality grocery item directly sourced and stored under temperature-controlled hygiene standards."}
-        </p>
-      </div>
-
-      {/* Related Products Carousel */}
-      {relatedProducts.length > 0 && (
-        <div className="space-y-4 pt-4">
-          <h2 className="text-lg font-bold text-[var(--text-primary)]">Similar Products in this Category</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-            {relatedProducts.map((relProduct) => (
-              <ProductCard key={relProduct.id} product={relProduct} />
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
+      <ProductDetailView
+        product={product}
+        initialVariantId={variantParam || selected?.id}
+        relatedProducts={relatedProducts}
+      />
+    </>
   );
 }

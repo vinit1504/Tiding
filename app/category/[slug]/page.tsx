@@ -17,11 +17,11 @@ export async function generateMetadata({
   const categoryName = category ? category.name : slug.replace(/-/g, " ");
 
   return {
-    title: `${categoryName} - Instant Delivery in 10 Mins | ${SITE_CONFIG.name}`,
-    description: `Shop fresh ${categoryName.toLowerCase()} online at ${SITE_CONFIG.name}. Delivered to your door in 10 minutes.`,
+    title: `${categoryName} - Express Grocery Delivery | ${SITE_CONFIG.name}`,
+    description: `Shop fresh ${categoryName.toLowerCase()} online at ${SITE_CONFIG.name}. Delivered to your door with express delivery.`,
     openGraph: {
       title: `${categoryName} | ${SITE_CONFIG.name}`,
-      description: `Order fresh ${categoryName.toLowerCase()} in 10 minutes.`,
+      description: `Order fresh ${categoryName.toLowerCase()} with express delivery.`,
     },
   };
 }

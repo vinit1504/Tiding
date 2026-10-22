@@ -195,6 +195,15 @@ export function AuthDrawer() {
         setOtpDigits(["", "", "", "", "", ""]);
         setEmail("");
         toast.success(`Welcome back, ${getUserFirstName(newUser)}!`);
+
+        // Check if there was a pending redirect (e.g. to /checkout)
+        if (typeof window !== "undefined") {
+          const redirectPath = sessionStorage.getItem("tiding_auth_redirect");
+          if (redirectPath) {
+            sessionStorage.removeItem("tiding_auth_redirect");
+            router.push(redirectPath);
+          }
+        }
       } catch (err: any) {
         toast.error(err?.message || "Invalid or expired verification code");
       } finally {
@@ -292,7 +301,7 @@ export function AuthDrawer() {
           <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-transparent" />
           <div className="absolute bottom-3 left-6 right-6 text-white space-y-1">
             <span className="rounded-full bg-[#18A818] px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-white">
-              ⚡ 10-Min Fast Track
+              ⚡ Express Sign In
             </span>
             <h3 className="text-base font-black leading-tight text-white">
               {user ? `Hello, ${user.name}` : "Login to Tiding"}

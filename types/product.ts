@@ -1,13 +1,22 @@
 export interface ProductVariant {
   id: string;
-  sku: string;
+  sku?: string;
+  name?: string;
+  variant_name?: string;
   unit: string; // e.g. "500 g", "1 kg", "Pack of 2"
   price: number;
+  selling_price?: number;
   mrp: number;
   discountPercentage?: number;
   stock: number;
+  stock_quantity?: number;
+  reserved_quantity?: number;
+  low_stock_threshold?: number;
   isAvailable: boolean;
+  is_in_stock?: boolean;
+  is_available?: boolean;
   image_url?: string;
+  attributes?: { attribute_name: string; value: string }[];
 }
 
 export interface Product {
@@ -17,7 +26,7 @@ export interface Product {
   brand?: string;
   description: string;
   image_url: string;
-  images?: string[];
+  images?: string[] | { id?: string; image_url: string; is_primary?: boolean }[];
   category_id: string;
   category_name: string;
   category_slug: string;
@@ -28,13 +37,19 @@ export interface Product {
   discountPercentage: number;
   unit: string;
   stock: number;
+  stock_quantity?: number;
   isAvailable: boolean;
+  is_in_stock?: boolean;
   isOrganic?: boolean;
   deliveryEtaMinutes: number;
   rating: number;
   ratingCount: number;
   variants?: ProductVariant[];
+  default_variant?: ProductVariant;
+  selected_variant?: ProductVariant;
   badge?: string; // e.g. "Bestseller", "20% OFF", "Organic"
+  store_id?: string;
+  attributes?: { attribute_name: string; value: string }[];
 }
 
 export interface Category {

@@ -6,7 +6,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "About Us - Farm-to-Fork Quick Commerce",
   description:
-    "Learn how Tiding delivers farm fresh vegetables, fruits, and daily grocery staples directly from local farmers to your kitchen in 10 minutes.",
+    "Learn how Tiding delivers farm fresh vegetables, fruits, and daily grocery staples directly from local farmers to your kitchen with express delivery.",
 };
 
 export default function AboutPage() {
@@ -39,7 +39,7 @@ export default function AboutPage() {
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#18A818]/15 text-[#18A818]">
             <Zap className="h-6 w-6" />
           </div>
-          <h2 className="text-sm font-bold text-[var(--text-primary)]">10-Minute Dark Stores</h2>
+          <h2 className="text-sm font-bold text-[var(--text-primary)]">Express Dark Stores</h2>
           <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
             Our neighborhood fulfillment hubs hold the freshest daily inventory, automated for 2-minute order packing.
           </p>

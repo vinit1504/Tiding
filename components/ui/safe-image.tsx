@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Image, { ImageProps } from "next/image";
 import { Package } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { sanitizeImageUrl } from "@/lib/utils/image-fallback";
 
 export interface SafeImageProps extends Omit<ImageProps, "src" | "alt"> {
   src?: string | null;
@@ -34,7 +35,8 @@ export function SafeImage({
 }: SafeImageProps) {
   const [hasError, setHasError] = useState(false);
 
-  const cleanSrc = typeof src === "string" ? src.trim() : "";
+  const rawSrc = typeof src === "string" ? src.trim() : "";
+  const cleanSrc = sanitizeImageUrl(rawSrc) || "";
   const isValidSrc = cleanSrc.length > 0 && (cleanSrc.startsWith("http://") || cleanSrc.startsWith("https://") || cleanSrc.startsWith("/"));
 
   // Reset error state if the src prop changes

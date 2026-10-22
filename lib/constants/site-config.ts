@@ -1,8 +1,8 @@
 export const SITE_CONFIG = {
   name: "Tiding",
-  tagline: "Instant Grocery Delivery in 10 Minutes",
+  tagline: "Instant Grocery & Essentials Delivery",
   description:
-    "Order farm-fresh vegetables, organic fruits, daily dairy essentials, bakery, snacks, and household staples delivered to your doorstep in 10-15 minutes.",
+    "Order farm-fresh vegetables, organic fruits, daily dairy essentials, bakery, snacks, and household staples delivered to your doorstep with express delivery.",
   url: process.env.NEXT_PUBLIC_APP_URL || "https://tiding.com",
   logoUrl:
     process.env.NEXT_PUBLIC_LOGO_URL ||
@@ -25,7 +25,7 @@ export const SITE_CONFIG = {
     "organic fruits delivery",
     "milk and dairy delivery",
     "quick commerce India",
-    "10 minute delivery",
+    "express delivery",
     "Tiding groceries",
   ],
 };

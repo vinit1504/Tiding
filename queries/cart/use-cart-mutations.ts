@@ -112,7 +112,7 @@ export function useMyCartQuery() {
       }
       return summary;
     },
-    enabled: !!token,
+    enabled: !!token && token !== "token_vinit_default",
     staleTime: Infinity,
     refetchOnWindowFocus: false,
     refetchOnMount: false,

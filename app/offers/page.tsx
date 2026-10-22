@@ -93,7 +93,7 @@ export default function OffersPage() {
                 Coupons & Promotions
               </h1>
               <p className="text-xs text-gray-500 mt-0.5">
-                Apply these coupons at cart or checkout to get instant discounts on 10-minute deliveries
+                Apply these coupons at cart or checkout to get instant discounts on your grocery orders
               </p>
             </div>
 

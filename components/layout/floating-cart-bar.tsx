@@ -1,17 +1,22 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useAtom, useAtomValue } from "jotai";
 import { ShoppingBag, ArrowRight } from "lucide-react";
 import { isCartDrawerOpenAtom, cartCountAtom, cartItemTotalAtom } from "@/stores";
 import { formatCurrency } from "@/lib/utils";
 
 export function FloatingCartBar() {
+  const [mounted, setMounted] = useState(false);
   const cartCount = useAtomValue(cartCountAtom);
   const cartTotal = useAtomValue(cartItemTotalAtom);
   const [, setIsCartDrawerOpen] = useAtom(isCartDrawerOpenAtom);
 
-  if (cartCount === 0) return null;
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted || cartCount === 0) return null;
 
   return (
     <div className="fixed bottom-4 left-4 right-4 z-40 sm:hidden animate-in fade-in slide-in-from-bottom-4 duration-300">

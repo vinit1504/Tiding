@@ -39,16 +39,19 @@ import { Button } from "@/components/ui/button";
 import { isCartDrawerOpenAtom, deliveryLocationAtom, activeCouponsAtom } from "@/stores";
 import { formatCurrency } from "@/lib/utils";
 import { useCart } from "@/hooks/use-cart";
+import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { CheckoutValidationWarning } from "@/types/cart";
 import { CouponSheet } from "@/components/cart/coupon-sheet";
 import { useCouponsQuery } from "@/queries/coupon/use-coupon-queries";
+import { InventoryValidationModal } from "@/components/cart/inventory-validation-modal";
 
 export function CartDrawer() {
   const router = useRouter();
   const [isOpen, setIsOpen] = useAtom(isCartDrawerOpenAtom);
   const location = useAtomValue(deliveryLocationAtom);
   const setActiveCoupons = useSetAtom(activeCouponsAtom);
+  const { isAuthenticated, openLogin } = useAuth();
 
   const {
     items,
@@ -158,6 +161,17 @@ export function CartDrawer() {
 
   // Handle checkout pre-flight integrity check
   const handleProceedToCheckout = async () => {
+    // If not authenticated, require login first
+    if (!isAuthenticated) {
+      toast.info("Please log in to proceed to checkout", {
+        description: "Your cart items are saved and ready for checkout.",
+      });
+      setIsOpen(false);
+      openLogin("/checkout");
+      router.push("/checkout");
+      return;
+    }
+
     setIsValidating(true);
     try {
       const result = await validateCheckout();
@@ -172,10 +186,45 @@ export function CartDrawer() {
     }
   };
 
-  const handleDismissWarningsAndProceed = () => {
+  const handleUpdateCartAndProceed = () => {
+    if (!validationWarnings || validationWarnings.length === 0) {
+      setIsOpen(false);
+      if (!isAuthenticated) {
+        openLogin("/checkout");
+      }
+      router.push("/checkout");
+      return;
+    }
+
+    for (const warning of validationWarnings) {
+      const targetItem = items.find(
+        (it) =>
+          it.id === warning.itemId ||
+          it.variantId === warning.variantId ||
+          it.cartItemId === warning.itemId
+      );
+      if (targetItem) {
+        const itemIdentifier = targetItem.cartItemId || targetItem.id;
+        const avail = warning.availableStock ?? 0;
+        if (avail <= 0 || warning.type === "ITEM_UNAVAILABLE") {
+          removeItem(itemIdentifier);
+        } else if (targetItem.quantity > avail) {
+          updateQuantity(itemIdentifier, avail);
+        }
+      }
+    }
+
+    toast.success("Basket updated to match dark store inventory");
     setValidationWarnings(null);
     setIsOpen(false);
+    if (!isAuthenticated) {
+      openLogin("/checkout");
+    }
     router.push("/checkout");
+  };
+
+  const handleDismissWarningsAndProceed = () => {
+    handleUpdateCartAndProceed();
   };
 
   return (
@@ -758,7 +807,7 @@ export function CartDrawer() {
                   </h3>
                   <p className="text-xs text-[var(--text-muted)] max-w-xs mx-auto">
                     Explore fresh vegetables, fruits, dairy, and snacks
-                    delivered to your doorstep in 10 minutes.
+                    delivered fresh to your doorstep.
                   </p>
                   <Button
                     size="sm"
@@ -885,6 +934,12 @@ export function CartDrawer() {
       <CouponSheet
         open={isCouponSheetOpen}
         onOpenChange={setIsCouponSheetOpen}
+      />
+      <InventoryValidationModal
+        isOpen={!!validationWarnings && validationWarnings.length > 0}
+        warnings={validationWarnings || []}
+        onClose={() => setValidationWarnings(null)}
+        onUpdateCartAndProceed={handleUpdateCartAndProceed}
       />
     </Drawer>
   );

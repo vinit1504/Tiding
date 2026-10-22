@@ -90,7 +90,7 @@ class LocationService {
 
   /**
    * Resolve Store by Area ID
-   * POST /api/v1/location/resolve-store
+   * POST /api/v1/stores/resolve-delivery
    * Body: { area_id: string }
    */
   async resolveStoreByArea(areaId: string): Promise<StoreResolutionResult | null> {
@@ -99,7 +99,7 @@ class LocationService {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      const res = await fetch(`${this.baseUrl}/location/resolve-store`, {
+      const res = await fetch(`${this.baseUrl}/stores/resolve-delivery`, {
         method: "POST",
         headers,
         body: JSON.stringify({ area_id: areaId }),
@@ -111,8 +111,13 @@ class LocationService {
 
       const data = json.data || json;
       const storeObj = data.store || (data.id || data.store_id || data.name ? data : null);
-      const isServiceable = data.isServiceable ?? data.is_serviceable ?? data.serviceable ?? (!!storeObj && storeObj.status === "ACTIVE");
-      const deliveryEtaMinutes = Number(data.deliveryEtaMinutes || data.delivery_eta_minutes || data.delivery?.delivery_time_minutes || (isServiceable ? 10 : 0));
+      const isServiceable = data.is_serviceable ?? data.isServiceable ?? data.serviceable ?? (!!storeObj && storeObj.status === "ACTIVE");
+      const deliveryEtaMinutes = Number(
+        data.delivery?.delivery_time_minutes ||
+        data.deliveryEtaMinutes ||
+        data.delivery_eta_minutes ||
+        (isServiceable ? 10 : 0)
+      );
 
       return {
         storeId: storeObj?.id || storeObj?.store_id || storeObj?._id,

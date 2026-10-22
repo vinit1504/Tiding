@@ -73,3 +73,27 @@ export function getCategoryFallbackMeta(name: string = "", slug: string = ""): C
 
   return { emoji: "🛍️", bgColor: "#F3F4F6", label: name || "Category" };
 }
+
+const KNOWN_BROKEN_IMAGE_URLS: Record<string, string> = {
+  "https://res.cloudinary.com/dktxfhq00/image/upload/tiding/categories/pooja-needs.jpg":
+    "https://images.unsplash.com/photo-1608686207856-001b95cf60ca?w=800&auto=format&fit=crop&q=80",
+};
+
+/**
+ * Validates and sanitizes image URLs, replacing known broken/404 assets with high-quality fallbacks.
+ */
+export function sanitizeImageUrl(url?: string | null, fallbackUrl?: string | null): string | null {
+  if (!url || typeof url !== "string") return fallbackUrl || null;
+  const trimmed = url.trim();
+  if (!trimmed) return fallbackUrl || null;
+
+  if (KNOWN_BROKEN_IMAGE_URLS[trimmed]) {
+    return KNOWN_BROKEN_IMAGE_URLS[trimmed];
+  }
+
+  if (trimmed.includes("tiding/categories/pooja-needs.jpg")) {
+    return "https://images.unsplash.com/photo-1608686207856-001b95cf60ca?w=800&auto=format&fit=crop&q=80";
+  }
+
+  return trimmed;
+}

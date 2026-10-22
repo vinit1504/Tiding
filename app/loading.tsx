@@ -1,15 +1,39 @@
-export default function Loading() {
+import { cn } from "@/lib/utils";
+import { DualRingLoader } from "@/components/ui/dual-ring-loader";
+
+export interface LoaderProps {
+  size?: "sm" | "md" | "lg" | "xl";
+  text?: string;
+  className?: string;
+}
+
+export function Loading({ size = "md", text, className }: LoaderProps) {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
-      <div className="relative w-16 h-16">
-        <div className="w-16 h-16 rounded-full border-4 border-emerald-100 border-t-[#18A818] animate-spin" />
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#18A818]" />
-        </div>
-      </div>
-      <p className="mt-4 text-sm font-medium text-slate-500 animate-pulse">
-        Loading fast groceries...
-      </p>
+    <div
+      className={cn(
+        "flex flex-col items-center justify-center gap-3 p-6 text-[var(--text-secondary)]",
+        className
+      )}
+    >
+      <DualRingLoader size={size} text={text} />
+    </div>
+  );
+}
+
+export function FullPageLoader({ text = "Loading..." }: { text?: string }) {
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[var(--background)]/80 backdrop-blur-xs">
+      <Loading size="lg" text={text} />
+    </div>
+  );
+}
+
+export { DualRingLoader };
+
+export default function RootLoading() {
+  return (
+    <div className="flex min-h-[70vh] w-full flex-col items-center justify-center">
+      <Loading size="lg" text="Loading..." />
     </div>
   );
 }

@@ -41,6 +41,9 @@ class InventoryService {
       if (Array.isArray(response)) {
         return response;
       }
+      if (response && "data" in response && Array.isArray((response as any).data)) {
+        return (response as any).data;
+      }
       if (response && "inventory" in response && Array.isArray(response.inventory)) {
         return response.inventory;
       }
@@ -48,6 +51,20 @@ class InventoryService {
     } catch {
       return [];
     }
+  }
+
+  /**
+   * Get store inventory mapped by product_variant_id for O(1) variant stock lookups
+   */
+  async getInventoryMap(storeId: string): Promise<Map<string, StoreInventoryItem>> {
+    const list = await this.getStoreInventory(storeId, { limit: 1000 });
+    const map = new Map<string, StoreInventoryItem>();
+    for (const item of list) {
+      if (item.product_variant_id) {
+        map.set(item.product_variant_id, item);
+      }
+    }
+    return map;
   }
 
   /**

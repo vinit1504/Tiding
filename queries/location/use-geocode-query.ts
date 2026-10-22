@@ -18,23 +18,57 @@ export interface ResolvedStoreData {
  * POST /api/v1/stores/resolve-delivery
  * Body: { latitude: number, longitude: number }
  */
+export type ResolveDeliveryInput =
+  | GeoCoordinates
+  | { area_id?: string; latitude?: number; longitude?: number; coords?: GeoCoordinates };
+
+/**
+ * Resolves delivery store by area_id or GPS coordinates using:
+ * POST /api/v1/stores/resolve-delivery
+ * Body: { area_id?: string, latitude?: number, longitude?: number }
+ */
 export async function resolveDeliveryStoreApi(
-  coords: GeoCoordinates
+  input: ResolveDeliveryInput
 ): Promise<ResolvedStoreData | null> {
-  if (!coords || typeof coords.latitude !== "number" || typeof coords.longitude !== "number") {
+  if (!input) return null;
+
+  const areaId = "area_id" in input ? input.area_id : undefined;
+  const latitude =
+    "latitude" in input && typeof input.latitude === "number"
+      ? input.latitude
+      : "coords" in input && input.coords?.latitude
+      ? input.coords.latitude
+      : "latitude" in input
+      ? (input as any).latitude
+      : undefined;
+
+  const longitude =
+    "longitude" in input && typeof input.longitude === "number"
+      ? input.longitude
+      : "coords" in input && input.coords?.longitude
+      ? input.coords.longitude
+      : "longitude" in input
+      ? (input as any).longitude
+      : undefined;
+
+  if (!areaId && (typeof latitude !== "number" || typeof longitude !== "number")) {
     return null;
   }
 
   try {
-    const res = await apiClient.post<any>("/stores/resolve-delivery", {
-      latitude: coords.latitude,
-      longitude: coords.longitude,
-    });
+    const payload: Record<string, any> = {};
+    if (areaId) payload.area_id = areaId;
+    if (typeof latitude === "number" && typeof longitude === "number") {
+      payload.latitude = latitude;
+      payload.longitude = longitude;
+    }
 
+    const res = await apiClient.post<any>("/stores/resolve-delivery", payload);
     if (!res) return null;
 
-    // Res could be { store: { ... }, isServiceable, estimatedDeliveryMinutes } or directly store object
-    const storeObj = res.store || (res.id || res.name || res.store_id || res.store_name ? res : null);
+    // Response structure: { success: true, data: { store: { ... }, delivery: { ... } } }
+    const root = res.data || res;
+    const storeObj = root.store || (root.id || root.name || root.store_id || root.storeName ? root : null);
     const storeId = storeObj?.id || storeObj?._id || storeObj?.store_id || storeObj?.storeId;
     const storeName =
       storeObj?.name ||
@@ -47,23 +81,26 @@ export async function resolveDeliveryStoreApi(
       storeObj?.formattedAddress ||
       "";
 
+    const delivery = root.delivery;
+
     const isServiceable =
-      res.isServiceable !== undefined
-        ? Boolean(res.isServiceable)
-        : res.is_serviceable !== undefined
-        ? Boolean(res.is_serviceable)
-        : res.serviceable !== undefined
-        ? Boolean(res.serviceable)
-        : Boolean(res.delivery || (res.store && res.store?.status === "ACTIVE"));
+      root.isServiceable !== undefined
+        ? Boolean(root.isServiceable)
+        : root.is_serviceable !== undefined
+        ? Boolean(root.is_serviceable)
+        : root.serviceable !== undefined
+        ? Boolean(root.serviceable)
+        : Boolean(delivery || (storeObj && (storeObj.status === "ACTIVE" || !storeObj.status)));
 
     const etaRaw =
-      res.delivery?.delivery_time_minutes ??
-      res.estimatedDeliveryMinutes ??
-      res.deliveryEtaMinutes ??
-      res.delivery_eta_minutes ??
-      res.settings?.preparation_time_minutes ??
-      res.etaMinutes ??
-      res.eta;
+      delivery?.delivery_time_minutes ??
+      delivery?.deliveryTimeMinutes ??
+      root.estimatedDeliveryMinutes ??
+      root.deliveryEtaMinutes ??
+      root.delivery_eta_minutes ??
+      root.settings?.preparation_time_minutes ??
+      root.etaMinutes ??
+      root.eta;
 
     const deliveryEtaMinutes =
       typeof etaRaw === "number" && !Number.isNaN(etaRaw)
@@ -75,12 +112,12 @@ export async function resolveDeliveryStoreApi(
         : 0;
 
     const distanceRaw =
-      res.delivery?.distance_km ??
-      res.delivery?.distance ??
-      res.distanceKm ??
-      res.distance_km ??
-      res.settings?.delivery_radius_km ??
-      res.distance;
+      delivery?.distance_km ??
+      delivery?.distance ??
+      root.distanceKm ??
+      root.distance_km ??
+      root.settings?.delivery_radius_km ??
+      root.distance;
 
     const distanceKm =
       distanceRaw !== undefined && distanceRaw !== null && !Number.isNaN(Number(distanceRaw))
@@ -133,8 +170,8 @@ export function useGeocodeQuery(coords?: GeoCoordinates | null) {
         coordinates: coords,
         deliveryEtaMinutes: storeInfo?.deliveryEtaMinutes || 8,
         isServiceable: storeInfo ? storeInfo.isServiceable : true,
-        darkStoreId: storeInfo?.storeId || "store-hsr-01",
-        darkStoreName: storeInfo?.storeName || "HSR Express Dark Store",
+        darkStoreId: storeInfo?.storeId || "2a6ba8df-637f-4939-bc17-69ad6832c050",
+        darkStoreName: storeInfo?.storeName || "Tiding Daily - Bopal",
         storeAddress: storeInfo?.storeAddress,
         storeDistanceKm: storeInfo?.distanceKm,
       };

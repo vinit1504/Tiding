@@ -28,6 +28,13 @@ import {
   isAuthDrawerOpenAtom,
 } from "@/stores";
 import { SavedAddress, DeliveryLocation } from "@/types/location";
+import {
+  useCustomerAddressesQuery,
+  useCreateAddressMutation,
+  useUpdateAddressMutation,
+  useDeleteAddressMutation,
+  useSetDefaultAddressMutation,
+} from "@/queries/customer/use-address-queries";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
@@ -41,13 +48,35 @@ export default function AddressesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAddress, setEditingAddress] = useState<SavedAddress | null>(null);
 
+  // Live Backend Addresses Query
+  const { data: serverAddresses = [], isLoading } = useCustomerAddressesQuery();
+  const createAddressMutation = useCreateAddressMutation();
+  const updateAddressMutation = useUpdateAddressMutation();
+  const deleteAddressMutation = useDeleteAddressMutation();
+  const setDefaultAddressMutation = useSetDefaultAddressMutation();
+
   useEffect(() => {
     setMounted(true);
   }, []);
 
   const isAuthenticated = mounted && !!user && session.isAuthenticated;
+
+  // Fallback to local user addresses if server query is empty
   const addresses: SavedAddress[] =
-    user?.savedAddresses && user.savedAddresses.length > 0
+    serverAddresses && serverAddresses.length > 0
+      ? serverAddresses.map((addr: any) => ({
+          id: addr.id,
+          type: (addr.address_type?.toLowerCase() === "work" ? "work" : "home") as any,
+          title: addr.address_type === "WORK" ? "Work" : "Home",
+          addressLine: [addr.address_line_1, addr.address_line_2].filter(Boolean).join(", "),
+          area: addr.area_name || addr.landmark || "Express Area",
+          city: addr.city_name || "Surat",
+          pincode: addr.pincode || "395007",
+          isDefault: !!addr.is_default,
+          receiverName: addr.recipient_name,
+          receiverPhone: addr.recipient_phone,
+        }))
+      : user?.savedAddresses && user.savedAddresses.length > 0
       ? user.savedAddresses
       : [];
 
@@ -61,30 +90,67 @@ export default function AddressesPage() {
     setIsModalOpen(true);
   };
 
-  const handleSaveModal = (data: Partial<SavedAddress>) => {
-    let updated: SavedAddress[];
-    if (editingAddress) {
-      updated = addresses.map((a) => (a.id === editingAddress.id ? ({ ...a, ...data } as SavedAddress) : a));
-      toast.success("Address updated successfully!");
-    } else {
-      const newAddress = {
-        ...data,
-        id: `addr-${Date.now()}`,
-      } as SavedAddress;
-      updated = [newAddress, ...addresses];
-      toast.success("New address added successfully!");
-    }
-
-    if (user) {
-      const updatedUser = { ...user, savedAddresses: updated };
-      setUser(updatedUser);
-      try {
-        localStorage.setItem("tiding_user", JSON.stringify(updatedUser));
-      } catch {}
+  const handleSaveModal = async (data: Partial<SavedAddress>) => {
+    try {
+      if (editingAddress) {
+        // Backend Update
+        if (editingAddress.id && !editingAddress.id.startsWith("addr-")) {
+          await updateAddressMutation.mutateAsync({
+            addressId: editingAddress.id,
+            payload: {
+              recipient_name: data.receiverName || data.title || "Customer",
+              recipient_phone: data.receiverPhone || user?.phone || "9876543210",
+              address_line_1: data.addressLine || "House",
+              address_type: (data.type?.toUpperCase() === "WORK" ? "WORK" : "HOME") as any,
+              landmark: data.landmark || null,
+            },
+          });
+        }
+        toast.success("Address updated successfully!");
+      } else {
+        // Backend Create
+        await createAddressMutation.mutateAsync({
+          address_type: (data.type?.toUpperCase() === "WORK" ? "WORK" : "HOME") as any,
+          recipient_name: data.receiverName || user?.name || "Customer",
+          recipient_phone: data.receiverPhone || user?.phone || "9876543210",
+          address_line_1: data.addressLine || "House",
+          area_id: "feacf6d2-53e1-40de-af4e-ddc1404c0fb7",
+          city_id: "e4f80d05-6ce3-40c3-9d12-3ad6dc29bac9",
+          state_id: "05efa890-b84c-44ed-b312-9ba531814aeb",
+          country_id: "bb1942fd-ab4f-48a9-999f-6cebcd644e68",
+          is_default: addresses.length === 0,
+        });
+        toast.success("New address added successfully!");
+      }
+    } catch (err: any) {
+      console.warn("Backend address operation failed, applying local fallback:", err);
+      // Local fallback
+      let updated: SavedAddress[];
+      if (editingAddress) {
+        updated = addresses.map((a) => (a.id === editingAddress.id ? ({ ...a, ...data } as SavedAddress) : a));
+      } else {
+        const newAddress = { ...data, id: `addr-${Date.now()}` } as SavedAddress;
+        updated = [newAddress, ...addresses];
+      }
+      if (user) {
+        const updatedUser = { ...user, savedAddresses: updated };
+        setUser(updatedUser);
+        try {
+          localStorage.setItem("tiding_user", JSON.stringify(updatedUser));
+        } catch {}
+      }
     }
   };
 
-  const handleSetDefault = (address: SavedAddress) => {
+  const handleSetDefault = async (address: SavedAddress) => {
+    try {
+      if (address.id && !address.id.startsWith("addr-")) {
+        await setDefaultAddressMutation.mutateAsync(address.id);
+      }
+    } catch (err) {
+      console.warn("Set default address warning:", err);
+    }
+
     const updated = addresses.map((addr) => ({
       ...addr,
       isDefault: addr.id === address.id,
@@ -112,7 +178,15 @@ export default function AddressesPage() {
     toast.success(`Delivering to ${address.title}: ${address.area}`);
   };
 
-  const handleDeleteAddress = (id: string) => {
+  const handleDeleteAddress = async (id: string) => {
+    try {
+      if (id && !id.startsWith("addr-")) {
+        await deleteAddressMutation.mutateAsync(id);
+      }
+    } catch (err) {
+      console.warn("Delete address warning:", err);
+    }
+
     const updated = addresses.filter((a) => a.id !== id);
     if (user) {
       const updatedUser = { ...user, savedAddresses: updated };

@@ -40,7 +40,7 @@ export default function PrivacyPolicyPage() {
                 <span>2. How We Use Your Information</span>
               </h2>
               <p>
-                Your information is used strictly to fulfill your 10-minute grocery order, process secure payments, communicate delivery arrival, and improve fresh product catalog availability. We never sell your personal information to third parties.
+                Your information is used strictly to fulfill your grocery order, process secure payments, communicate delivery arrival, and improve fresh product catalog availability. We never sell your personal information to third parties.
               </p>
             </section>
 

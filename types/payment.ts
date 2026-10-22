@@ -50,7 +50,7 @@ export interface RazorpayOptions {
   name: string;
   description?: string;
   image?: string;
-  order_id: string;
+  order_id?: string;
   handler: (response: RazorpayHandlerResponse) => void | Promise<void>;
   prefill?: {
     name?: string;

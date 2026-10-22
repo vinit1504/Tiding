@@ -3,7 +3,7 @@ import { SITE_CONFIG } from "@/lib/constants/site-config";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Tiding - 10-Minute Grocery Delivery",
+    name: "Tiding - Instant Grocery Delivery",
     short_name: "Tiding",
     description: SITE_CONFIG.description,
     start_url: "/",

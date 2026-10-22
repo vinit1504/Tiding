@@ -1,6 +1,6 @@
 import { SITE_CONFIG } from "@/lib/constants/site-config";
 import { API_ENDPOINTS } from "@/lib/constants/api-endpoints";
-import { UserProfile } from "@/types/user";
+import { UserProfile, DeviceSessionDto, UpdateProfileDto } from "@/types/user";
 import {
   getStoredAccessToken,
   getStoredRefreshToken,
@@ -108,7 +108,66 @@ export class AuthService {
   }
 
   /**
-   * Send 6-digit Email OTP
+   * 1. Register with Email/Password
+   */
+  async register(payload: {
+    email: string;
+    password?: string;
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+  }): Promise<{ success: boolean; data?: any; message?: string }> {
+    const res = await fetch(`${this.baseUrl}${API_ENDPOINTS.AUTH.REGISTER}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok) {
+      throw new Error(json?.message || "Registration failed");
+    }
+    return json;
+  }
+
+  /**
+   * 2. Login with Email/Password
+   */
+  async login(payload: {
+    email: string;
+    password?: string;
+    deviceName?: string;
+    deviceType?: string;
+  }): Promise<{ accessToken: string; refreshToken: string; user: UserProfile }> {
+    const res = await fetch(`${this.baseUrl}${API_ENDPOINTS.AUTH.LOGIN}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        ...payload,
+        deviceName: payload.deviceName || "Web Browser",
+        deviceType: payload.deviceType || "DESKTOP",
+      }),
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.success) {
+      throw new Error(json?.message || "Invalid credentials");
+    }
+    const data = json.data;
+    this.setTokens({
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken,
+    });
+    const userProfile = parseBackendUserToProfile(data.user, payload.email);
+    setStoredUser(userProfile);
+    return {
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken,
+      user: userProfile,
+    };
+  }
+
+  /**
+   * 3. Send 6-digit Email OTP
    */
   async sendEmailOtp(email: string): Promise<{ success: boolean; message?: string }> {
     const res = await fetch(`${this.baseUrl}${API_ENDPOINTS.AUTH.LOGIN_EMAIL_OTP_SEND}`, {
@@ -125,7 +184,7 @@ export class AuthService {
   }
 
   /**
-   * Verify Email OTP
+   * 4. Verify Email OTP
    */
   async verifyEmailOtp(
     email: string,
@@ -135,6 +194,7 @@ export class AuthService {
     const res = await fetch(`${this.baseUrl}${API_ENDPOINTS.AUTH.LOGIN_EMAIL_OTP_VERIFY}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({
         email: cleanEmail,
         otp: otp.trim(),
@@ -165,28 +225,99 @@ export class AuthService {
   }
 
   /**
-   * Refresh Access Token
+   * Unified Send OTP (Email or Phone)
    */
-  async refreshAccessToken(): Promise<{ accessToken: string; refreshToken: string } | null> {
+  async sendOtp(contact: string): Promise<{ success: boolean; message?: string }> {
+    if (contact.includes("@")) {
+      return this.sendEmailOtp(contact);
+    }
+    const res = await fetch(`${this.baseUrl}${API_ENDPOINTS.AUTH.LOGIN_SMS_OTP_SEND}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: contact.trim() }),
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok) {
+      throw new Error(json?.message || "Failed to send SMS OTP");
+    }
+    return json;
+  }
+
+  /**
+   * Unified Verify OTP
+   */
+  async verifyOtp(contact: string, otp: string) {
+    if (contact.includes("@")) {
+      return this.verifyEmailOtp(contact, otp);
+    }
+    const res = await fetch(`${this.baseUrl}${API_ENDPOINTS.AUTH.LOGIN_SMS_OTP_VERIFY}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        phone: contact.trim(),
+        otp: otp.trim(),
+        deviceName: "Web Browser",
+        deviceType: "DESKTOP",
+      }),
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.success) {
+      throw new Error(json?.message || "Invalid OTP code");
+    }
+    const data = json.data;
+    this.setTokens({
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken,
+    });
+    const userProfile = parseBackendUserToProfile(data.user, contact);
+    setStoredUser(userProfile);
+    return {
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken,
+      user: userProfile,
+    };
+  }
+
+  /**
+   * 5. Refresh Access Token (Cookie or Header)
+   */
+  async refreshAccessToken(): Promise<{ accessToken: string; refreshToken?: string } | null> {
     const token = this.getRefreshToken();
-    if (!token) return null;
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+
+    if (token) {
+      headers["x-refresh-token"] = token;
+      headers["Authorization"] = `Bearer ${token}`;
+    }
 
     try {
       const res = await fetch(`${this.baseUrl}${API_ENDPOINTS.AUTH.REFRESH_TOKEN}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken: token }),
+        headers,
+        credentials: "include", // Ensures httpOnly refresh cookie is sent
+        body: JSON.stringify(
+          token ? { refreshToken: token, refresh_token: token } : {}
+        ),
       });
 
       const json = await res.json().catch(() => null);
-      if (res.ok && json?.success && json?.data?.accessToken) {
+      const data = json?.data || json;
+      const accessToken =
+        data?.accessToken || data?.access_token || data?.token;
+      const newRefreshToken =
+        data?.refreshToken || data?.refresh_token || token || undefined;
+
+      if (res.ok && accessToken) {
         this.setTokens({
-          accessToken: json.data.accessToken,
-          refreshToken: json.data.refreshToken || token,
+          accessToken,
+          ...(newRefreshToken ? { refreshToken: newRefreshToken } : {}),
         });
         return {
-          accessToken: json.data.accessToken,
-          refreshToken: json.data.refreshToken || token,
+          accessToken,
+          refreshToken: newRefreshToken || "",
         };
       }
       return null;
@@ -197,19 +328,70 @@ export class AuthService {
   }
 
   /**
-   * Get Current Authenticated User (Me)
-   * Deduplicates concurrent in-flight requests to avoid redundant duplicate calls
+   * 6. Logout Current User
+   */
+  async logout(): Promise<void> {
+    const token = this.getAccessToken();
+    if (token) {
+      try {
+        await fetch(`${this.baseUrl}${API_ENDPOINTS.AUTH.LOGOUT}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          credentials: "include",
+        });
+      } catch (err) {
+        console.warn("Server logout call failed:", err);
+      }
+    }
+    this.clearAuth();
+  }
+
+  /**
+   * 7. Forgot Password
+   */
+  async forgotPassword(email: string): Promise<{ success: boolean; message?: string }> {
+    const res = await fetch(`${this.baseUrl}${API_ENDPOINTS.AUTH.FORGOT_PASSWORD}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email.trim().toLowerCase() }),
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok) {
+      throw new Error(json?.message || "Failed to process forgot password request");
+    }
+    return json;
+  }
+
+  /**
+   * 8. Reset Password
+   */
+  async resetPassword(token: string, newPassword: string): Promise<{ success: boolean; message?: string }> {
+    const res = await fetch(`${this.baseUrl}${API_ENDPOINTS.AUTH.RESET_PASSWORD}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, newPassword }),
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok) {
+      throw new Error(json?.message || "Failed to reset password");
+    }
+    return json;
+  }
+
+  /**
+   * 9. Get Current Authenticated User (Me)
    */
   async getMe(): Promise<UserProfile | null> {
     const token = this.getAccessToken();
     if (!token) return null;
 
-    // Do not attempt backend verification with default mock token
     if (token === "token_vinit_default" || !token.includes(".")) {
       return null;
     }
 
-    // If a getMe request is already in-flight, return the same promise
     if (this.inFlightMePromise) {
       return this.inFlightMePromise;
     }
@@ -225,7 +407,6 @@ export class AuthService {
           },
         });
 
-        // If token expired (401), attempt refresh once
         if (res.status === 401) {
           const refreshed = await this.refreshAccessToken();
           if (refreshed?.accessToken) {
@@ -264,24 +445,98 @@ export class AuthService {
   }
 
   /**
-   * Logout Current User
+   * 10. Update Profile (PUT /api/v1/auth/me)
    */
-  async logout(): Promise<void> {
+  async updateProfile(payload: UpdateProfileDto): Promise<UserProfile> {
     const token = this.getAccessToken();
-    if (token) {
-      try {
-        await fetch(`${this.baseUrl}${API_ENDPOINTS.AUTH.LOGOUT}`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        });
-      } catch (err) {
-        console.warn("Server logout call failed:", err);
-      }
+    if (!token) throw new Error("Authentication required");
+
+    const res = await fetch(`${this.baseUrl}${API_ENDPOINTS.AUTH.ME}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.success) {
+      throw new Error(json?.message || "Failed to update profile");
     }
-    this.clearAuth();
+
+    const updatedUser = json.data;
+    const fallback = updatedUser.email || updatedUser.phone || "User";
+    const profile = parseBackendUserToProfile(updatedUser, fallback);
+    setStoredUser(profile);
+    return profile;
+  }
+
+  /**
+   * 11. List Active Device Sessions (GET /api/v1/auth/sessions)
+   */
+  async listSessions(): Promise<DeviceSessionDto[]> {
+    const token = this.getAccessToken();
+    if (!token) return [];
+
+    const res = await fetch(`${this.baseUrl}${API_ENDPOINTS.AUTH.SESSIONS}`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.success) {
+      return [];
+    }
+
+    return Array.isArray(json.data) ? json.data : [];
+  }
+
+  /**
+   * 12. Revoke Specific Session (DELETE /api/v1/auth/sessions/:sessionId)
+   */
+  async revokeSession(sessionId: string): Promise<{ success: boolean; message?: string }> {
+    const token = this.getAccessToken();
+    if (!token) throw new Error("Authentication required");
+
+    const res = await fetch(`${this.baseUrl}${API_ENDPOINTS.AUTH.SESSION(sessionId)}`, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const json = await res.json().catch(() => null);
+    if (!res.ok) {
+      throw new Error(json?.message || "Failed to revoke session");
+    }
+    return json;
+  }
+
+  /**
+   * 13. Revoke All Other Sessions (POST /api/v1/auth/logout-all)
+   */
+  async logoutAllSessions(): Promise<{ success: boolean; message?: string }> {
+    const token = this.getAccessToken();
+    if (!token) throw new Error("Authentication required");
+
+    const res = await fetch(`${this.baseUrl}${API_ENDPOINTS.AUTH.LOGOUT_ALL}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const json = await res.json().catch(() => null);
+    if (!res.ok) {
+      throw new Error(json?.message || "Failed to logout all sessions");
+    }
+    return json;
   }
 }
 

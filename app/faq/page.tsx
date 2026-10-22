@@ -4,14 +4,14 @@ import { SITE_CONFIG } from "@/lib/constants/site-config";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Frequently Asked Questions (FAQ) - 10-Minute Grocery Delivery",
+  title: "Frequently Asked Questions (FAQ) - Express Grocery Delivery",
   description:
-    "Find answers to frequently asked questions about Tiding 10-minute grocery delivery, return policy, payment methods, delivery areas, and produce freshness.",
+    "Find answers to frequently asked questions about Tiding express grocery delivery, return policy, payment methods, delivery areas, and produce freshness.",
 };
 
 const FAQS = [
   {
-    question: "How does Tiding deliver groceries in 10-15 minutes?",
+    question: "How does Tiding deliver groceries so quickly?",
     answer:
       "We operate a hyper-local network of automated micro-fulfillment dark stores situated right in your neighborhood. When you place an order, our staff packs the items within 2 minutes and our delivery partner delivers them immediately via dedicated electric delivery routes.",
   },
@@ -63,7 +63,7 @@ export default function FaqPage() {
           Frequently Asked Questions
         </h1>
         <p className="text-xs text-[var(--text-muted)] max-w-md mx-auto">
-          Everything you need to know about our lightning-fast 10-minute grocery service.
+          Everything you need to know about our express grocery service.
         </p>
       </div>
 

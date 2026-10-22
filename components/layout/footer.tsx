@@ -24,7 +24,7 @@ export function Footer() {
               <Zap className="h-5 w-5" />
             </div>
             <div>
-              <h4 className="text-sm font-bold text-slate-900">10-Minute Delivery</h4>
+              <h4 className="text-sm font-bold text-slate-900">Express Delivery</h4>
               <p className="text-xs text-slate-500">From local dark stores to your doorstep</p>
             </div>
           </div>

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Poppins } from "next/font/google";
 import "./globals.css";
 import { AppProviders } from "@/components/providers";
@@ -21,7 +22,7 @@ const poppins = Poppins({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_CONFIG.url),
   title: {
-    default: `${SITE_CONFIG.name} - Instant Grocery Delivery in 10 Minutes`,
+    default: `${SITE_CONFIG.name} - Instant Grocery & Essentials Delivery`,
     template: `%s | ${SITE_CONFIG.name}`,
   },
   description: SITE_CONFIG.description,
@@ -44,13 +45,13 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_IN",
     url: SITE_CONFIG.url,
-    title: `${SITE_CONFIG.name} - 10-Minute Grocery Delivery`,
+    title: `${SITE_CONFIG.name} - Instant Grocery Delivery`,
     description: SITE_CONFIG.description,
     siteName: SITE_CONFIG.name,
   },
   twitter: {
     card: "summary_large_image",
-    title: `${SITE_CONFIG.name} - 10-Minute Grocery Delivery`,
+    title: `${SITE_CONFIG.name} - Instant Grocery Delivery`,
     description: SITE_CONFIG.description,
   },
   icons: {
@@ -92,6 +93,10 @@ export default function RootLayout({
           <CartDrawer />
           <AuthDrawer />
         </AppProviders>
+        <Script
+          src="https://checkout.razorpay.com/v1/checkout.js"
+          strategy="lazyOnload"
+        />
       </body>
     </html>
   );

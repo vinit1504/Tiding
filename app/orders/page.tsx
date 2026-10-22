@@ -244,7 +244,7 @@ export default function OrdersPage() {
                 No orders placed yet
               </h3>
               <p className="text-xs text-gray-500 max-w-sm mx-auto">
-                You haven&apos;t placed any 10-minute grocery orders yet. Start exploring fresh vegetables, dairy, and essentials!
+                You haven&apos;t placed any grocery orders yet. Start exploring fresh vegetables, dairy, and essentials!
               </p>
               <Link href="/" className="inline-block pt-2">
                 <Button className="bg-[#0c831f] hover:bg-[#0a6f1a] text-white font-bold text-xs px-6">

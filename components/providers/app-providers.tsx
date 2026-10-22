@@ -54,9 +54,18 @@ function StoreHydrator() {
     } catch {}
 
     try {
-      const isLoggedOut = localStorage.getItem("tiding_logged_out") === "true";
       const savedUser = localStorage.getItem("tiding_user");
       const savedToken = localStorage.getItem("tiding_token");
+
+      // Clear legacy mock tokens if found
+      if (savedToken === "token_vinit_default" || savedUser?.includes("usr-vinit")) {
+        localStorage.removeItem("tiding_user");
+        localStorage.removeItem("tiding_token");
+        setUser(null);
+        setSession({ user: null, token: null, isAuthenticated: false });
+        return;
+      }
+
       if (savedUser && savedToken) {
         const parsedUser = JSON.parse(savedUser);
         setUser(parsedUser);
@@ -78,32 +87,44 @@ function StoreHydrator() {
                   user: liveProfile,
                   isAuthenticated: true,
                 }));
+              } else {
+                // If token rejected/expired and refresh failed, clear session
+                setUser(null);
+                setSession({ user: null, token: null, isAuthenticated: false });
+                authService.clearAuth();
               }
             });
           });
         }
-      } else if (!isLoggedOut) {
-        const defaultUser = {
-          id: "usr-vinit",
-          name: "Vinit",
-          firstName: "Vinit",
-          email: "vinit@example.com",
-          phone: "+91 75673 37686",
-          walletBalance: 100,
-          roles: ["CUSTOMER"],
-          status: "ACTIVE",
-          savedAddresses: [],
-        };
-        setUser(defaultUser);
+      } else {
+        // User is unauthenticated: ensure clean null state
+        setUser(null);
         setSession({
-          user: defaultUser,
-          token: "token_vinit_default",
-          isAuthenticated: true,
+          user: null,
+          token: null,
+          isAuthenticated: false,
         });
-        localStorage.setItem("tiding_user", JSON.stringify(defaultUser));
-        localStorage.setItem("tiding_token", "token_vinit_default");
       }
     } catch {}
+
+    const handleAuthExpired = () => {
+      setUser(null);
+      setSession({
+        user: null,
+        token: null,
+        isAuthenticated: false,
+      });
+      try {
+        localStorage.removeItem("tiding_user");
+        localStorage.removeItem("tiding_token");
+        localStorage.removeItem("tiding_refresh_token");
+      } catch {}
+    };
+
+    window.addEventListener("tiding_auth_expired", handleAuthExpired);
+    return () => {
+      window.removeEventListener("tiding_auth_expired", handleAuthExpired);
+    };
   }, [setLocation, setHasSetLocation, setCartItems, setSavedForLater, setUser, setSession]);
 
   return null;

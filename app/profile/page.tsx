@@ -10,13 +10,26 @@ import {
   Save,
   CheckCircle2,
   Edit3,
-  BellRing,
+  Laptop,
+  Smartphone,
+  Globe,
+  Trash2,
+  LogOut,
+  Clock,
+  ShieldCheck,
+  AlertCircle,
 } from "lucide-react";
 import { AccountSidebar } from "@/components/account/account-sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { userProfileAtom, authSessionAtom } from "@/stores";
 import { getUserDisplayInitials } from "@/lib/utils";
+import {
+  useUpdateProfileMutation,
+  useDeviceSessionsQuery,
+  useRevokeSessionMutation,
+  useLogoutAllSessionsMutation,
+} from "@/queries";
 import { toast } from "sonner";
 
 export default function ProfilePage() {
@@ -33,10 +46,12 @@ export default function ProfilePage() {
   const [phone, setPhone] = useState("");
   const [gender, setGender] = useState("Not Specified");
   const [dob, setDob] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
 
-  const [notifWhatsapp, setNotifWhatsapp] = useState(true);
-  const [notifPromos, setNotifPromos] = useState(false);
+  // Queries and mutations
+  const updateProfileMutation = useUpdateProfileMutation();
+  const { data: deviceSessions = [], isLoading: isLoadingSessions } = useDeviceSessionsQuery();
+  const revokeSessionMutation = useRevokeSessionMutation();
+  const logoutAllMutation = useLogoutAllSessionsMutation();
 
   useEffect(() => {
     setMounted(true);
@@ -53,38 +68,68 @@ export default function ProfilePage() {
     }
   }, [user]);
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
 
-    setIsSaving(true);
-    const fullName = `${firstName.trim()} ${lastName.trim()}`.trim() || user.name;
-    const updatedUser = {
-      ...user,
-      name: fullName,
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      email: email.trim() || user.email,
-      phone: phone.trim() || user.phone,
-      profile: {
-        ...(user.profile || {}),
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        gender,
-        dateOfBirth: dob,
-      },
-    };
+    const trimmedFirst = firstName.trim();
+    const trimmedLast = lastName.trim();
+    const fullName = `${trimmedFirst} ${trimmedLast}`.trim() || user.name;
 
-    setTimeout(() => {
+    try {
+      const updatedUser = await updateProfileMutation.mutateAsync({
+        first_name: trimmedFirst,
+        last_name: trimmedLast,
+        display_name: fullName,
+        phone: phone.trim() || undefined,
+        gender: gender !== "Not Specified" ? gender : undefined,
+        date_of_birth: dob || undefined,
+      });
+
       setUser(updatedUser);
       setSession((prev) => ({ ...prev, user: updatedUser }));
-      try {
-        localStorage.setItem("tiding_user", JSON.stringify(updatedUser));
-      } catch {}
-      setIsSaving(false);
       setIsEditing(false);
       toast.success("Profile updated successfully!");
-    }, 400);
+    } catch (err: any) {
+      // Fallback update locally if network fails
+      const fallbackUser = {
+        ...user,
+        name: fullName,
+        firstName: trimmedFirst,
+        lastName: trimmedLast,
+        phone: phone.trim() || user.phone,
+        profile: {
+          ...(user.profile || {}),
+          firstName: trimmedFirst,
+          lastName: trimmedLast,
+          gender,
+          dateOfBirth: dob,
+        },
+      };
+      setUser(fallbackUser);
+      setSession((prev) => ({ ...prev, user: fallbackUser }));
+      setIsEditing(false);
+      toast.success("Profile updated locally");
+    }
+  };
+
+  const handleRevokeSession = async (sessionId: string) => {
+    try {
+      await revokeSessionMutation.mutateAsync(sessionId);
+      toast.success("Device session revoked successfully");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to revoke device session");
+    }
+  };
+
+  const handleLogoutAll = async () => {
+    if (!confirm("Are you sure you want to log out all other devices?")) return;
+    try {
+      await logoutAllMutation.mutateAsync();
+      toast.success("All other device sessions logged out");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to logout sessions");
+    }
   };
 
   if (!mounted) return null;
@@ -182,10 +227,10 @@ export default function ProfilePage() {
                     <Input
                       type="email"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="h-9 text-xs rounded-lg border-gray-300"
-                      required
+                      disabled
+                      className="h-9 text-xs rounded-lg border-gray-300 bg-gray-50 text-gray-500 cursor-not-allowed"
                     />
+                    <p className="text-[10px] text-gray-400">Email cannot be modified directly</p>
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs font-semibold text-gray-600">
@@ -196,6 +241,7 @@ export default function ProfilePage() {
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       className="h-9 text-xs rounded-lg border-gray-300"
+                      placeholder="+91 98765 43210"
                     />
                   </div>
                 </div>
@@ -203,7 +249,7 @@ export default function ProfilePage() {
                 <div className="flex items-center gap-3 pt-2">
                   <Button
                     type="submit"
-                    isLoading={isSaving}
+                    isLoading={updateProfileMutation.isPending}
                     className="h-9 bg-[#0c831f] hover:bg-[#0a6f1a] text-white text-xs font-bold px-4 rounded-lg cursor-pointer"
                   >
                     <Save className="h-3.5 w-3.5 mr-1" />
@@ -213,7 +259,7 @@ export default function ProfilePage() {
                     type="button"
                     variant="outline"
                     onClick={() => setIsEditing(false)}
-                    className="h-9 text-xs rounded-lg"
+                    className="h-9 text-xs rounded-lg cursor-pointer"
                   >
                     Cancel
                   </Button>
@@ -242,7 +288,7 @@ export default function ProfilePage() {
                     Phone Number
                   </p>
                   <p className="text-sm font-semibold text-gray-900">
-                    {user?.phone || "+91 75673 37686"}
+                    {user?.phone || "Not provided"}
                   </p>
                 </div>
                 <div className="border border-gray-100 rounded-xl p-3.5 space-y-0.5">
@@ -254,6 +300,104 @@ export default function ProfilePage() {
                     <span>Active Member</span>
                   </p>
                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* Active Device Sessions Section */}
+          <div className="space-y-3 pt-4 border-t border-gray-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-[#0c831f]" />
+                  <span>Active Device Sessions</span>
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Manage devices and browsers logged into your account
+                </p>
+              </div>
+
+              {deviceSessions.length > 1 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleLogoutAll}
+                  isLoading={logoutAllMutation.isPending}
+                  className="h-8 px-3 text-[11px] font-semibold text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 cursor-pointer"
+                >
+                  <LogOut className="h-3 w-3 mr-1" />
+                  <span>Log out all other devices</span>
+                </Button>
+              )}
+            </div>
+
+            {isLoadingSessions ? (
+              <div className="py-6 text-center text-xs text-gray-400">
+                Loading active sessions...
+              </div>
+            ) : deviceSessions.length === 0 ? (
+              <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 text-xs text-gray-500 flex items-center gap-2">
+                <Globe className="h-4 w-4 text-gray-400" />
+                <span>Current Web Session (Active)</span>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
+                {deviceSessions.map((s) => {
+                  const isMobile =
+                    s.deviceType?.toLowerCase().includes("mobile") ||
+                    s.userAgent?.toLowerCase().includes("mobile");
+
+                  return (
+                    <div
+                      key={s.id}
+                      className="p-3.5 sm:p-4 flex items-center justify-between gap-3 hover:bg-gray-50/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="h-9 w-9 rounded-lg bg-gray-100 flex items-center justify-center text-gray-600">
+                          {isMobile ? (
+                            <Smartphone className="h-4 w-4" />
+                          ) : (
+                            <Laptop className="h-4 w-4" />
+                          )}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-gray-900">
+                              {s.deviceName || (isMobile ? "Mobile Device" : "Desktop Computer")}
+                            </span>
+                            {s.isCurrentSession && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700">
+                                This device
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3 text-[11px] text-gray-400 mt-0.5">
+                            {s.ipAddress && <span>IP: {s.ipAddress}</span>}
+                            {s.lastActiveAt && (
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {new Date(s.lastActiveAt).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {!s.isCurrentSession && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRevokeSession(s.id)}
+                          disabled={revokeSessionMutation.isPending}
+                          className="h-8 px-2.5 text-xs text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg cursor-pointer"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-1" />
+                          <span>Revoke</span>
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

@@ -4,7 +4,7 @@ import { MapPin, Clock, AlertCircle } from "lucide-react";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Serviceable Delivery Areas - 10-Minute Grocery Delivery Locations",
+  title: "Serviceable Delivery Areas - Express Grocery Delivery Locations",
   description:
     "Check all neighborhood delivery locations served by Tiding in Bengaluru and Ahmedabad.",
 };
@@ -39,7 +39,7 @@ export default async function DeliveryAreasPage() {
           Serviceable Delivery Localities
         </h1>
         <p className="text-xs text-[var(--text-muted)] max-w-md mx-auto">
-          We deliver fresh groceries, milk, fruits, and vegetables from local dark stores within 10-15 minutes.
+          We deliver fresh groceries, milk, fruits, and vegetables from local dark stores directly to your doorstep.
         </p>
       </div>
 

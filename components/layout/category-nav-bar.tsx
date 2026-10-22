@@ -49,9 +49,7 @@ export function CategoryNavBar() {
         if (el) el.scrollIntoView({ behavior: "smooth" });
       }
     } else {
-      const isRealUuid = id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-      const url = isRealUuid ? `/category/${slug}?categoryId=${id}` : `/category/${slug}`;
-      router.push(url);
+      router.push(`/category/${slug}`);
     }
   };
 

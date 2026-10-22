@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAtom, useAtomValue } from "jotai";
-import { ChevronDown, Search, ShoppingCart, User, X } from "lucide-react";
+import { ChevronDown, MapPin, Search, ShoppingCart, User, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -33,6 +33,7 @@ import {
   getUserDisplayInitials,
   getUserFirstName,
 } from "@/lib/utils";
+import { useCustomerAddressesQuery } from "@/queries";
 
 const SEARCH_PLACEHOLDERS = [
   "Search 'farm fresh tomatoes'...",
@@ -64,7 +65,53 @@ export function AppHeader() {
     setMounted(true);
   }, []);
 
-  const isAuthenticated = mounted && !!user && session.isAuthenticated;
+  const displayCartCount = mounted ? cartCount : 0;
+  const displayCartTotal = mounted ? cartTotal : 0;
+
+  const isAuthenticated =
+    mounted &&
+    !!user &&
+    session.isAuthenticated &&
+    session.token !== "token_vinit_default" &&
+    user?.id !== "usr-vinit";
+
+  // Fetch saved customer addresses when authenticated
+  const { data: savedAddresses = [] } = useCustomerAddressesQuery();
+  const defaultAddress = useMemo(() => {
+    if (!isAuthenticated || !savedAddresses.length) return null;
+    return savedAddresses.find((a) => a.is_default) || savedAddresses[0];
+  }, [isAuthenticated, savedAddresses]);
+
+  // Compute clean, readable display address
+  const displayAddress = useMemo(() => {
+    // 1. Primary: Show the user's actively selected delivery location
+    if (location) {
+      if (location.houseNo && location.society && location.houseNo.toLowerCase().trim() !== location.society.toLowerCase().trim()) {
+        return `${location.houseNo}, ${location.society}`;
+      }
+      if (location.society) {
+        return `${location.society}${location.city ? `, ${location.city}` : ""}`;
+      }
+      if (location.area) {
+        return `${location.area}${location.city ? `, ${location.city}` : ""}`;
+      }
+      if (location.formattedAddress) {
+        return location.formattedAddress;
+      }
+    }
+
+    // 2. Fallback: Show user's default saved address
+    if (defaultAddress) {
+      const parts = [
+        defaultAddress.address_line_1,
+        defaultAddress.address_line_2 || defaultAddress.landmark || defaultAddress.area_name,
+        defaultAddress.city_name,
+      ].filter(Boolean);
+      return parts.join(", ") || "My Address";
+    }
+
+    return "Select delivery location";
+  }, [location, defaultAddress]);
 
   const handleLogout = () => {
     setUser(null);
@@ -73,7 +120,7 @@ export function AppHeader() {
       localStorage.removeItem("tiding_user");
       localStorage.removeItem("tiding_token");
       localStorage.setItem("tiding_logged_out", "true");
-    } catch {}
+    } catch { }
     toast.success("Logged out successfully");
   };
 
@@ -94,10 +141,10 @@ export function AppHeader() {
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-[var(--border)] bg-[var(--surface)]/98 backdrop-blur-md shadow-[0_1px_3px_0_rgba(0,0,0,0.03)] transition-colors">
-      <div className="flex w-full items-center justify-between gap-3 px-4 sm:px-6 lg:px-8 xl:px-10 py-2.5 sm:py-3">
-        {/* Left Section: Brand Logo & Address Section */}
-        <div className="flex items-center gap-3 sm:gap-4 lg:gap-5 shrink-0">
-          {/* Logo - Matching Footer Size & Clean Design */}
+      <div className="flex w-full items-center justify-between gap-3 px-3 sm:px-6 lg:px-8 xl:px-10 py-2 sm:py-2.5">
+        {/* Left Section: Brand Logo & Proper Address Section */}
+        <div className="flex items-center gap-2.5 sm:gap-3.5 lg:gap-4 shrink-0">
+          {/* Logo - Sleek & Properly Proportionate Size */}
           <Link
             href="/"
             className="flex items-center shrink-0 transition-opacity hover:opacity-90 active:scale-95 focus:outline-none"
@@ -106,39 +153,56 @@ export function AppHeader() {
             <Image
               src={SITE_CONFIG.logoUrl}
               alt={SITE_CONFIG.name}
-              width={140}
-              height={55}
+              width={120}
+              height={80}
               priority
-              style={{ width: "auto", height: "100px" }}
-              className="h-9 w-auto object-contain"
+              style={{ width: "auto", height: "auto" }}
+              className="h-7 sm:h-12 w-auto object-contain"
             />
           </Link>
 
           {/* Elegant vertical divider for structure */}
-          <div className="h-8 w-px bg-slate-200/80 hidden sm:block shrink-0" />
+          <div className="h-7 w-px bg-slate-200 hidden sm:block shrink-0" />
 
-          {/* Premium & Simple Address Section */}
+          {/* Proper Address Section */}
           <button
+            type="button"
             onClick={() => setIsLocationModalOpen(true)}
-            className="group flex flex-col items-start text-left cursor-pointer transition-all hover:bg-[var(--surface-hover)] px-2.5 py-1.5 rounded-xl focus:outline-none max-w-[160px] sm:max-w-[260px] md:max-w-[320px] lg:max-w-[380px]"
+            className="group flex items-center gap-2 text-left cursor-pointer transition-all hover:bg-gray-100/80 px-2 sm:px-2.5 py-1.5 rounded-xl focus:outline-none max-w-[170px] sm:max-w-[270px] md:max-w-[340px] lg:max-w-[400px]"
             title="Change delivery location"
           >
-            <span
-              suppressHydrationWarning
-              className={`text-xs sm:text-[13px] md:text-sm font-extrabold tracking-tight leading-tight whitespace-nowrap transition-colors ${location.isServiceable !== false ? "text-[var(--text-primary)] group-hover:text-[#18A818]" : "text-amber-600 dark:text-amber-400"}`}
-            >
-              {location.isServiceable !== false
-                ? `Delivery in ${location.deliveryEtaMinutes || 8} minutes`
-                : "Delivery Unavailable"}
-            </span>
-            <div className="flex items-center gap-1 text-[11px] sm:text-xs text-[var(--text-secondary)] leading-tight mt-0.5 min-w-0 w-full">
-              <span className="truncate font-medium" suppressHydrationWarning>
-                {location.area ||
-                  location.society ||
-                  location.formattedAddress ||
-                  "Select location"}
-              </span>
-              <ChevronDown className="h-3 w-3 shrink-0 text-[var(--text-muted)] group-hover:text-[var(--text-primary)] transition-transform group-hover:translate-y-0.5" />
+            {/* MapPin Accent Icon */}
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-[#0c831f] group-hover:bg-emerald-100 transition-colors">
+              <MapPin className="h-4 w-4" />
+            </div>
+
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span
+                  suppressHydrationWarning
+                  className={`text-xs sm:text-[13px] font-black tracking-tight leading-tight whitespace-nowrap transition-colors ${location.isServiceable !== false
+                    ? "text-gray-900 group-hover:text-[#0c831f]"
+                    : "text-amber-600"
+                    }`}
+                >
+                  {location.isServiceable !== false
+                    ? `Delivery in ${location.deliveryEtaMinutes || 8} mins`
+                    : "Unavailable"}
+                </span>
+
+                {((location as any)?.addressType || defaultAddress?.address_type) && (
+                  <span className="hidden md:inline-block px-1.5 py-0.2 text-[9px] font-extrabold uppercase rounded bg-gray-100 text-gray-600 leading-tight">
+                    {(location as any)?.addressType || defaultAddress?.address_type}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-1 text-[11px] sm:text-xs text-gray-500 leading-tight mt-0.5 min-w-0 w-full">
+                <span className="truncate font-medium" suppressHydrationWarning>
+                  {displayAddress}
+                </span>
+                <ChevronDown className="h-3 w-3 shrink-0 text-gray-400 group-hover:text-gray-800 transition-transform group-hover:translate-y-0.5" />
+              </div>
             </div>
           </button>
         </div>
@@ -171,12 +235,13 @@ export function AppHeader() {
           {/* Login Button (When Unauthenticated) OR Profile Avatar Dropdown (When Authenticated) */}
           {!isAuthenticated ? (
             <button
+              type="button"
               onClick={() => setIsAuthDrawerOpen(true)}
               aria-label="Login to account"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-bold text-[var(--text-primary)] hover:text-[#18A818] hover:bg-[var(--surface-hover)] transition-all cursor-pointer"
+              className="h-10 sm:h-11 px-3.5 sm:px-4.5 flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-secondary)]/60 text-[var(--text-primary)] font-bold text-xs sm:text-sm shadow-xs hover:bg-[var(--surface-hover)] hover:border-[var(--border-strong,var(--border))] transition-all active:scale-95 cursor-pointer shrink-0"
             >
-              <User className="h-4 w-4 text-[var(--text-secondary)]" />
-              <span className="font-bold">Login</span>
+              <User className="h-4 w-4 text-[var(--text-primary)] shrink-0" />
+              <span>Login</span>
             </button>
           ) : (
             <DropdownMenu>
@@ -282,44 +347,38 @@ export function AppHeader() {
             </DropdownMenu>
           )}
 
-          {/* Prominent Cart Pill Button - Displayed ONLY when authenticated */}
-          {isAuthenticated && (
-            <Button
-              onClick={() => setIsCartDrawerOpen(true)}
-              size="sm"
-              className="h-10 sm:h-11 px-3.5 sm:px-4 bg-[#0c831f] hover:bg-[#0a6f1a] text-white flex items-center gap-2.5 rounded-xl font-bold text-xs sm:text-sm shadow-xs transition-transform active:scale-95 cursor-pointer whitespace-nowrap"
-            >
-              <div className="relative flex items-center justify-center shrink-0">
-                <ShoppingCart className="h-4.5 w-4.5" />
-                {cartCount > 0 && (
-                  <span
-                    suppressHydrationWarning
-                    className="absolute -top-2.5 -right-2.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white shadow-xs"
-                  >
-                    {cartCount}
-                  </span>
-                )}
-              </div>
-              <div
-                className="flex items-center gap-1.5 leading-none"
-                suppressHydrationWarning
-              >
-                <span>
-                  {cartCount === 0
-                    ? "My Cart"
-                    : `${cartCount} ${cartCount === 1 ? "item" : "items"}`}
+          {/* Prominent Cart Pill Button - Always displayed for all users */}
+          <Button
+            onClick={() => setIsCartDrawerOpen(true)}
+            size="sm"
+            className="h-10 sm:h-11 px-3.5 sm:px-4 bg-[#0c831f] hover:bg-[#0a6f1a] text-white flex items-center gap-2.5 rounded-xl font-bold text-xs sm:text-sm shadow-xs transition-transform active:scale-95 cursor-pointer whitespace-nowrap"
+          >
+            <div className="relative flex items-center justify-center shrink-0">
+              <ShoppingCart className="h-4.5 w-4.5" />
+              {displayCartCount > 0 && (
+                <span
+                  className="absolute -top-2.5 -right-2.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white shadow-xs"
+                >
+                  {displayCartCount}
                 </span>
-                {cartTotal > 0 && (
-                  <>
-                    <span className="opacity-60 text-xs">•</span>
-                    <span className="font-extrabold">
-                      {formatCurrency(cartTotal)}
-                    </span>
-                  </>
-                )}
-              </div>
-            </Button>
-          )}
+              )}
+            </div>
+            <div className="flex items-center gap-1.5 leading-none">
+              <span>
+                {displayCartCount === 0
+                  ? "My Cart"
+                  : `${displayCartCount} ${displayCartCount === 1 ? "item" : "items"}`}
+              </span>
+              {displayCartTotal > 0 && (
+                <>
+                  <span className="opacity-60 text-xs">•</span>
+                  <span className="font-extrabold">
+                    {formatCurrency(displayCartTotal)}
+                  </span>
+                </>
+              )}
+            </div>
+          </Button>
         </div>
       </div>
     </header>

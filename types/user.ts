@@ -33,3 +33,28 @@ export interface AuthSession {
   token: string | null;
   isAuthenticated: boolean;
 }
+
+export interface DeviceSessionDto {
+  id: string;
+  userId: string;
+  deviceName?: string;
+  deviceType?: string;
+  ipAddress?: string;
+  userAgent?: string;
+  lastActiveAt?: string;
+  createdAt?: string;
+  isCurrentSession?: boolean;
+}
+
+export interface UpdateProfileDto {
+  first_name?: string;
+  last_name?: string;
+  display_name?: string;
+  phone?: string;
+  avatar_url?: string;
+  avatar_public_id?: string;
+  date_of_birth?: string;
+  gender?: string;
+  timezone?: string;
+  locale?: string;
+}

@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Terms of Service - Conditions of Use",
-  description: "Terms and conditions governing the use of Tiding 10-minute grocery delivery services.",
+  description: "Terms and conditions governing the use of Tiding instant grocery delivery services.",
 };
 
 export default function TermsPage() {

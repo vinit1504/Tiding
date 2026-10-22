@@ -85,13 +85,16 @@ export interface CatalogProduct {
   image_url: string;
   variants?: ProductVariantItem[];
   is_active?: boolean;
-  // Normalized consumer fields for UI
+  default_variant?: any;
+  selected_variant?: any;
+  stock_quantity?: number;
   price: number;
   mrp: number;
   discountPercentage?: number;
   unit: string;
   stock: number;
   isAvailable: boolean;
+  is_in_stock?: boolean;
   deliveryEtaMinutes?: number;
   rating?: number;
   ratingCount?: number;

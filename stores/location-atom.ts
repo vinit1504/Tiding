@@ -2,19 +2,19 @@ import { atom } from "jotai";
 import { DeliveryLocation } from "@/types/location";
 
 const defaultLocation: DeliveryLocation = {
-  area: "Shop no. 1, Kahan Park, nr. Varachha",
-  society: "Kahan Park",
-  houseNo: "Shop no. 1",
-  landmark: "nr. Varachha",
-  formattedAddress: "Shop no. 1, Kahan Park, nr. Varachha, Surat, Gujarat 395006",
-  city: "Surat",
+  area: "Bopal",
+  society: "South Bopal",
+  houseNo: "Shop No. 1",
+  landmark: "Near Bopal Lake",
+  formattedAddress: "Bopal, Ahmedabad, Gujarat 380058",
+  city: "Ahmedabad",
   state: "Gujarat",
-  pincode: "395006",
-  coordinates: { latitude: 21.2266, longitude: 72.8753 },
-  deliveryEtaMinutes: 8,
+  pincode: "380058",
+  coordinates: { latitude: 23.0345, longitude: 72.4682 },
+  deliveryEtaMinutes: 15,
   isServiceable: true,
-  darkStoreId: "fe9cc1ee-a1e2-436d-86e0-9603bbd46684",
-  darkStoreName: "Varachha Express Store",
+  darkStoreId: "2a6ba8df-637f-4939-bc17-69ad6832c050",
+  darkStoreName: "Tiding Daily - Bopal",
 };
 
 // Server-safe initial location for SSR and initial hydration parity
@@ -28,6 +28,9 @@ export const persistentLocationAtom = atom(
     if (typeof window !== "undefined") {
       try {
         localStorage.setItem("tiding_delivery_location", JSON.stringify(newLocation));
+        if (newLocation.darkStoreId) {
+          document.cookie = `tiding_store_id=${encodeURIComponent(newLocation.darkStoreId)}; path=/; max-age=31536000; SameSite=Lax`;
+        }
       } catch {
         // storage quota
       }
@@ -37,3 +40,6 @@ export const persistentLocationAtom = atom(
 
 // Boolean flag to track if the user has completed initial location check
 export const hasUserSetLocationAtom = atom<boolean>(false);
+
+// Boolean loading indicator during dark store resolution
+export const isLocatingStoreAtom = atom<boolean>(false);
