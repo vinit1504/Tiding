@@ -2,7 +2,14 @@
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import "leaflet/dist/leaflet.css";
-import { MapPin, Navigation, Loader2, Compass, Layers, Check } from "lucide-react";
+import {
+  MapPin,
+  Navigation,
+  Loader2,
+  Compass,
+  Layers,
+  Check,
+} from "lucide-react";
 import { toast } from "sonner";
 
 export interface MapLocationResult {
@@ -34,7 +41,8 @@ export default function InteractiveMap({
 
   const [coords, setCoords] = useState(initialCoordinates);
   const [isReverseGeocoding, setIsReverseGeocoding] = useState(false);
-  const [liveLocationInfo, setLiveLocationInfo] = useState<MapLocationResult | null>(null);
+  const [liveLocationInfo, setLiveLocationInfo] =
+    useState<MapLocationResult | null>(null);
   const [isLocatingGPS, setIsLocatingGPS] = useState(false);
 
   // Reverse geocode a coordinate via /api/geocode
@@ -75,7 +83,7 @@ export default function InteractiveMap({
         setIsReverseGeocoding(false);
       }
     },
-    [onLocationSelect]
+    [onLocationSelect],
   );
 
   // Initialize Leaflet Map
@@ -187,7 +195,7 @@ export default function InteractiveMap({
         mapInstanceRef.current.setView(
           [initialCoordinates.latitude, initialCoordinates.longitude],
           16,
-          { animate: true }
+          { animate: true },
         );
         markerInstanceRef.current.setLatLng([
           initialCoordinates.latitude,
@@ -195,7 +203,7 @@ export default function InteractiveMap({
         ]);
         handleReverseGeocode(
           initialCoordinates.latitude,
-          initialCoordinates.longitude
+          initialCoordinates.longitude,
         );
       }
     }
@@ -229,7 +237,7 @@ export default function InteractiveMap({
         setIsLocatingGPS(false);
         toast.error("Failed to detect GPS. Please click on the map to pin.");
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 10000 },
     );
   };
 
@@ -295,15 +303,18 @@ export default function InteractiveMap({
             </div>
           </div>
 
-          {/* Quick Coordinate & Dark Store Pill */}
+          {/* Quick Coordinate & Dark Store Pilli */}
           <div className="mt-2 pt-2 border-t border-neutral-100 dark:border-neutral-800 flex items-center justify-between text-[10px] font-medium text-neutral-500 dark:text-neutral-400">
             <span className="truncate">
-              📍 {coords.latitude.toFixed(4)}° N, {coords.longitude.toFixed(4)}° E
+              📍 {coords.latitude.toFixed(4)}° N, {coords.longitude.toFixed(4)}°
+              E
             </span>
             {liveLocationInfo?.darkStoreName ? (
               <span className="text-emerald-600 dark:text-emerald-400 font-bold shrink-0">
                 ⚡ {liveLocationInfo.darkStoreName}
-                {liveLocationInfo.deliveryEtaMinutes ? ` (~${liveLocationInfo.deliveryEtaMinutes}m)` : ""}
+                {liveLocationInfo.deliveryEtaMinutes
+                  ? ` (~${liveLocationInfo.deliveryEtaMinutes}m)`
+                  : ""}
               </span>
             ) : null}
           </div>
