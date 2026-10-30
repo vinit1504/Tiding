@@ -13,6 +13,7 @@ import {
   deliveryPincodeAtom,
   checkoutValidationAtom,
   isCartSyncingAtom,
+  deduplicateCartItems,
 } from "@/stores";
 import {
   AddItemToCartPayload,
@@ -29,6 +30,44 @@ export function markItemAsRemoved(id: string) {
   setTimeout(() => {
     recentlyRemovedItemIds.delete(id);
   }, 5000);
+}
+
+function matchesCartItem(localItem: any, b: any): boolean {
+  if (!localItem || !b) return false;
+  // 1. Direct server cartItemId match
+  if (localItem.cartItemId && b.cartItemId && localItem.cartItemId === b.cartItemId) {
+    return true;
+  }
+  if (localItem.cartItemId && b.id && localItem.cartItemId === b.id) {
+    return true;
+  }
+  // 2. Exact id match
+  if (localItem.id && b.id && localItem.id === b.id) {
+    return true;
+  }
+  // 3. Variant match:
+  // If either has a variant, they MUST match by variantId!
+  const localHasVariant = !!localItem.variantId && localItem.variantId !== localItem.productId;
+  const bHasVariant = !!b.variantId && b.variantId !== b.productId;
+
+  if (localHasVariant || bHasVariant) {
+    if (localItem.variantId && b.variantId && localItem.variantId === b.variantId) {
+      return true;
+    }
+    if (localItem.id && b.variantId && localItem.id === b.variantId) {
+      return true;
+    }
+    if (b.id && localItem.variantId && b.id === localItem.variantId) {
+      return true;
+    }
+    return false;
+  }
+
+  // 4. Product match ONLY when neither has a distinct variant
+  if (localItem.productId && b.productId && localItem.productId === b.productId) {
+    return true;
+  }
+  return false;
 }
 
 export function useMyCartQuery() {
@@ -69,13 +108,7 @@ export function useMyCartQuery() {
                   !recentlyRemovedItemIds.has(l.productId || "")
               )
               .map((localItem) => {
-                const match = backendItems.find(
-                  (b) =>
-                    (localItem.cartItemId && b.cartItemId === localItem.cartItemId) ||
-                    b.id === localItem.id ||
-                    (localItem.variantId && b.variantId === localItem.variantId) ||
-                    (localItem.productId && b.productId === localItem.productId)
-                );
+                const match = backendItems.find((b) => matchesCartItem(localItem, b));
                 if (match) {
                   return {
                     ...match,
@@ -87,17 +120,10 @@ export function useMyCartQuery() {
               });
 
             const missing = backendItems.filter(
-              (b) =>
-                !updated.some(
-                  (l) =>
-                    (l.cartItemId && b.cartItemId === l.cartItemId) ||
-                    l.id === b.id ||
-                    (l.variantId && b.variantId === l.variantId) ||
-                    (l.productId && b.productId === l.productId)
-                )
+              (b) => !updated.some((l) => matchesCartItem(l, b))
             );
 
-            return [...updated, ...missing];
+            return deduplicateCartItems([...updated, ...missing]);
           });
         }
         if (Array.isArray(summary.saved_for_later_items)) {
@@ -154,13 +180,7 @@ function syncStateFromSummary(
             !recentlyRemovedItemIds.has(l.productId || "")
         )
         .map((localItem) => {
-          const backendMatch = backendItems.find(
-            (b) =>
-              (localItem.cartItemId && b.cartItemId === localItem.cartItemId) ||
-              b.id === localItem.id ||
-              (localItem.variantId && b.variantId === localItem.variantId) ||
-              (localItem.productId && b.productId === localItem.productId)
-          );
+          const backendMatch = backendItems.find((b) => matchesCartItem(localItem, b));
           if (backendMatch) {
             return {
               ...backendMatch,
@@ -171,11 +191,15 @@ function syncStateFromSummary(
           return localItem;
         });
 
-      return updated;
+      const missing = backendItems.filter(
+        (b) => !updated.some((l) => matchesCartItem(l, b))
+      );
+
+      return deduplicateCartItems([...updated, ...missing]);
     });
   }
   if (Array.isArray(summary.saved_for_later_items)) {
-    setSavedForLater(summary.saved_for_later_items.map(normalizeBackendCartItem));
+    setSavedForLater(deduplicateCartItems(summary.saved_for_later_items.map(normalizeBackendCartItem)));
   }
   if (summary.coupon_code) {
     setAppliedCoupon({

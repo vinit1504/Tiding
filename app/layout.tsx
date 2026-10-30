@@ -76,7 +76,10 @@ export default function RootLayout({
         />
         <WebsiteJsonLd />
       </head>
-      <body className={`${poppins.className} font-sans min-h-screen bg-[var(--background)] text-[var(--text-primary)] antialiased flex flex-col selection:bg-[#18A818]/20 selection:text-[#18A818]`}>
+      <body
+        suppressHydrationWarning
+        className={`${poppins.className} font-sans min-h-screen bg-[var(--background)] text-[var(--text-primary)] antialiased flex flex-col selection:bg-[#18A818]/20 selection:text-[#18A818]`}
+      >
         <AppProviders>
           {/* Top Header */}
           <AppHeader />

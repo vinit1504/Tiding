@@ -17,7 +17,7 @@ import {
   AlertCircle,
   Loader2,
 } from "lucide-react";
-import { AccountSidebar } from "@/components/account/account-sidebar";
+import { AccountLayout } from "@/components/account/account-layout";
 import { useAtom, useAtomValue } from "jotai";
 import {
   userProfileAtom,
@@ -187,13 +187,7 @@ export default function OrdersPage() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-80px)] bg-[#f4f6fb] py-6 sm:py-8">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row gap-6 items-start">
-        {/* Left Sidebar */}
-        <AccountSidebar activeTab="orders" />
-
-        {/* Right Content Panel */}
-        <main className="flex-1 w-full space-y-4">
+    <AccountLayout activeTab="orders" mainClassName="space-y-4">
           {isLoading ? (
             <div className="space-y-4">
               {[1, 2, 3].map((i) => (
@@ -445,8 +439,6 @@ export default function OrdersPage() {
               );
             })
           )}
-        </main>
-      </div>
-    </div>
+    </AccountLayout>
   );
 }

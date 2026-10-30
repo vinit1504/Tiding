@@ -7,7 +7,7 @@ import {
   Plus,
   Minus,
   Package,
-  Clock,
+  Timer,
   Star,
   Flame,
   Sparkles,
@@ -19,6 +19,7 @@ import { Product } from "@/types/product";
 import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
 import { useCart } from "@/hooks/use-cart";
+import { useWishlist } from "@/hooks/use-wishlist";
 import {
   popElement,
   burstHearts,
@@ -57,12 +58,18 @@ const reduceMotion = () =>
 
 export function ProductCardSkeleton() {
   return (
-    <div className="w-full max-w-[150px] animate-pulse">
-      <div className="aspect-square w-full rounded-2xl bg-slate-200/70" />
-      <div className="mt-4 h-2.5 w-10 rounded bg-slate-200/70" />
-      <div className="mt-2 h-3 w-full rounded bg-slate-200/70" />
-      <div className="mt-1 h-3 w-2/3 rounded bg-slate-200/70" />
-      <div className="mt-2 h-4 w-14 rounded bg-slate-200/70" />
+    <div className="w-full animate-pulse rounded-2xl border border-slate-200 bg-white p-2">
+      <div className="aspect-square w-full rounded-xl bg-slate-200/70" />
+      <div className="mt-3 h-2.5 w-14 rounded bg-slate-200/70" />
+      <div className="mt-2 h-3.5 w-3/4 rounded bg-slate-200/70" />
+      <div className="mt-1.5 h-3 w-1/3 rounded bg-slate-200/70" />
+      <div className="mt-4 flex items-end justify-between">
+        <div className="space-y-1.5">
+          <div className="h-4 w-10 rounded bg-slate-200/70" />
+          <div className="h-3 w-8 rounded bg-slate-200/70" />
+        </div>
+        <div className="h-8 w-[72px] rounded-lg bg-slate-200/70" />
+      </div>
     </div>
   );
 }
@@ -91,6 +98,7 @@ export function ProductCard({
   const firstQty = useRef(true);
 
   const { items, addToCart, updateQuantity } = useCart();
+  const { isWishlisted: checkWishlist, toggleWishlist: triggerWishlist } = useWishlist();
 
   useEffect(() => {
     setMounted(true);
@@ -105,10 +113,6 @@ export function ProductCard({
     }
   }, []);
 
-  useEffect(() => {
-    if (typeof isWishlisted === "boolean") setWished(isWishlisted);
-  }, [isWishlisted]);
-
   const p = product as Product & ExtraProductFields;
 
   // 1. Variant & stock
@@ -116,6 +120,14 @@ export function ProductCard({
   const activeVariant = product.default_variant || variantsList[0] || null;
   const variantId = activeVariant?.id;
   const extraOptions = variantsList.length > 1 ? variantsList.length : 0;
+
+  const isWishedGlobal = typeof isWishlisted === "boolean"
+    ? isWishlisted
+    : checkWishlist(product.id, variantId);
+
+  useEffect(() => {
+    setWished(isWishedGlobal);
+  }, [isWishedGlobal]);
 
   const rawStock =
     activeVariant?.stock_quantity ?? product.stock_quantity ?? product.stock;
@@ -216,17 +228,23 @@ export function ProductCard({
     stop(e);
     const next = !wished;
     setWished(next);
-    onToggleWishlist?.(product, next);
 
     const btn = heartRef.current;
     if (btn) {
       popElement(btn);
       if (next) {
         burstHearts(btn);
-        flyHeartToHeader(btn);
       }
     }
-    if (!next) toast("Removed from wishlist");
+
+    if (onToggleWishlist) {
+      onToggleWishlist(product, next);
+    } else {
+      triggerWishlist(
+        { id: product.id, variantId, name: product.name },
+        btn
+      );
+    }
   };
 
   const handleNotify = (e: React.MouseEvent) => {
@@ -274,11 +292,8 @@ export function ProductCard({
         ? Math.round(((product.mrp - product.price) / product.mrp) * 100)
         : 0;
 
-  const unitText = product.unit
-    ? product.unit.toLowerCase().includes("pack")
-      ? product.unit
-      : `1 pack (${product.unit})`
-    : "1 pack";
+  // Reference UI shows just the unit, e.g. "200 g"
+  const unitText = product.unit || "1 pack";
 
   // 6. Rating & tags
   const ratingValue = Number(p.rating ?? p.average_rating ?? 0);
@@ -292,16 +307,16 @@ export function ProductCard({
   return (
     <div
       ref={rootRef}
-      className={`group relative flex w-full max-w-[150px] flex-col select-none ${className}`}
+      className={`group relative flex w-full select-none flex-col rounded-2xl border border-slate-200 bg-white p-2 shadow-sm transition-shadow duration-300 ${
+        isOutOfStock ? "" : "hover:shadow-lg hover:shadow-slate-200"
+      } ${className}`}
     >
       {/* IMAGE AREA */}
       <div className="relative">
         <Link
           href={productHref}
-          className={`relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50 p-2 transition-all duration-300 ${isOutOfStock
-              ? ""
-              : "group-hover:-translate-y-1 group-hover:border-slate-300 group-hover:shadow-xl group-hover:shadow-slate-200"
-            }`}
+          prefetch={false}
+          className="relative block aspect-square w-full overflow-hidden rounded-xl bg-slate-50"
         >
           {shouldShowImage && !imageLoaded && (
             <div className="absolute inset-0 animate-pulse bg-slate-100" />
@@ -312,17 +327,17 @@ export function ProductCard({
               src={cleanImage}
               alt={product.name}
               fill
-              sizes="(max-width: 640px) 130px, 150px"
-              className={`object-contain p-2 mix-blend-multiply transition-all duration-500 ${isOutOfStock
-                  ? "grayscale opacity-60"
-                  : "group-hover:scale-110 group-hover:-rotate-1"
+              sizes="(max-width: 640px) 160px, 175px"
+              className={`object-cover transition-all duration-500 ${isOutOfStock
+                ? "grayscale opacity-60"
+                : "group-hover:scale-105"
                 } ${imageLoaded ? "" : "opacity-0"}`}
               onLoad={() => setImageLoaded(true)}
               onError={() => setImageError(true)}
             />
           ) : (
             <div
-              className={`flex h-full w-full flex-col items-center justify-center rounded-lg bg-slate-50 text-center ${isOutOfStock ? "grayscale opacity-60" : ""
+              className={`flex h-full w-full flex-col items-center justify-center bg-slate-50 text-center ${isOutOfStock ? "grayscale opacity-60" : ""
                 }`}
             >
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200/70 text-slate-400">
@@ -338,32 +353,10 @@ export function ProductCard({
             <div className="pointer-events-none absolute inset-0 bg-white/40" />
           )}
 
-          {/* STATUS CHIP (bottom-left). Short, so it never touches ADD */}
-          {(isOutOfStock || eta > 0) && (
-            <span
-              className={`pointer-events-none absolute bottom-1.5 left-1.5 z-10 inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-[9px] font-bold uppercase leading-none tracking-wide shadow-sm ${isOutOfStock
-                  ? "max-w-[100px] bg-slate-900/90 text-white"
-                  : "max-w-[60px] bg-white/95 text-slate-700 ring-1 ring-black/5"
-                }`}
-            >
-              {isOutOfStock ? (
-                <>
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
-                  Out of stock
-                </>
-              ) : (
-                <>
-                  <Clock className="h-2.5 w-2.5 shrink-0 text-[#18A818]" />
-                  {eta}m
-                </>
-              )}
-            </span>
-          )}
-
-          {/* Bestseller / New tag (below the heart) */}
+          {/* Bestseller / New tag (bottom-left of image) */}
           {showTag && (
             <span
-              className={`absolute right-1.5 top-9 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[8px] font-extrabold uppercase leading-none tracking-wide text-white shadow-sm ${p.is_bestseller ? "bg-orange-500" : "bg-blue-500"
+              className={`absolute bottom-1.5 left-1.5 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[8px] font-extrabold uppercase leading-none tracking-wide text-white shadow-sm ${p.is_bestseller ? "bg-orange-500" : "bg-blue-500"
                 }`}
             >
               {p.is_bestseller ? (
@@ -379,6 +372,40 @@ export function ProductCard({
           )}
         </Link>
 
+        {/* OFFER RIBBON (hangs from top-left, only when in stock) */}
+        {!isOutOfStock && discountPct > 0 && (
+          <div
+            className="pointer-events-none absolute -top-0.5 left-2.5 z-10"
+            style={{ filter: "drop-shadow(0 2px 2px rgba(0,0,0,0.22))" }}
+            aria-label={`${discountPct}% off`}
+          >
+            <div
+              className="flex min-w-[34px] flex-col items-center bg-gradient-to-b from-[#22C322] to-[#18A818] px-1.5 pb-3.5 pt-2 leading-none text-white"
+              style={{
+                clipPath:
+                  "polygon(0 0, 100% 0, 100% 100%, 50% 82%, 0 100%)",
+              }}
+            >
+              <span className="text-[13px] font-extrabold tracking-tight">
+                {discountPct}%
+              </span>
+              <span className="mt-[3px] text-[9px] font-extrabold tracking-[0.12em]">
+                OFF
+              </span>
+            </div>
+            {/* top highlight line for a stitched look */}
+            <span className="absolute inset-x-0 top-0 h-[2px] bg-white/30" />
+          </div>
+        )}
+
+        {/* NOTIFY ME bell (top-left, only when out of stock) */}
+        {isOutOfStock && (
+          <span className="pointer-events-none absolute left-1.5 top-1.5 z-10 inline-flex items-center gap-1 rounded-full bg-slate-900/90 px-2 py-[3px] text-[9px] font-bold uppercase leading-none tracking-wide text-white shadow-sm">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
+            Out of stock
+          </span>
+        )}
+
         {/* WISHLIST HEART (top-right) */}
         <button
           ref={heartRef}
@@ -392,108 +419,24 @@ export function ProductCard({
               }`}
           />
         </button>
-
-        {/* NOTIFY ME (top-left, only when out of stock) */}
-        {isOutOfStock && (
-          <button
-            onClick={handleNotify}
-            disabled={notified}
-            aria-label={
-              notified
-                ? "You will be notified"
-                : `Notify me when ${product.name} is back`
-            }
-            title={notified ? "We'll notify you" : "Notify me"}
-            className={`absolute left-1.5 top-1.5 z-20 flex h-6 w-6 items-center justify-center rounded-full shadow-sm ring-1 transition-all duration-200 ${notified
-                ? "cursor-default bg-[#18A818] text-white ring-[#18A818]"
-                : "cursor-pointer bg-white/95 text-slate-600 ring-black/5 hover:scale-110 hover:text-slate-900 active:scale-90"
-              }`}
-          >
-            {notified ? (
-              <Check className="h-3.5 w-3.5 stroke-[3]" />
-            ) : (
-              <span ref={bellRef} className="inline-flex origin-top">
-                <BellRing className="h-3.5 w-3.5" />
-              </span>
-            )}
-          </button>
-        )}
-
-        {/* RIBBON OFFER (top-left, only when in stock) */}
-        {!isOutOfStock && discountPct > 0 && (
-          <div
-            className="pointer-events-none absolute -top-px left-2 z-10 flex flex-col items-center bg-[#18A818] px-1.5 pb-3 pt-1.5 leading-none text-white shadow-sm"
-            style={{ clipPath: "polygon(0 0, 100% 0, 100% 100%, 50% 84%, 0 100%)" }}
-          >
-            <span className="text-[12px] font-extrabold">{discountPct}%</span>
-            <span className="mt-0.5 text-[8px] font-bold tracking-wider">OFF</span>
-          </div>
-        )}
-
-        {/* ADD / STEPPER (only when in stock) */}
-        {!isOutOfStock && (
-          <div
-            onClick={stop}
-            className="absolute -bottom-3 right-1.5 z-20 flex flex-col items-center"
-          >
-            {displayQuantity === 0 ? (
-              <>
-                <button
-                  onClick={handleAddToCart}
-                  aria-label={`Add ${product.name} to cart`}
-                  className="flex h-[30px] min-w-[68px] cursor-pointer items-center justify-center rounded-lg border border-[#18A818] bg-white px-3 text-[13px] font-extrabold uppercase tracking-wide text-[#18A818] shadow-md transition-all duration-150 hover:bg-[#18A818] hover:text-white active:scale-90"
-                >
-                  ADD
-                </button>
-                {extraOptions > 0 && (
-                  <span className="mt-0.5 rounded-full bg-white/90 px-1.5 text-[8px] font-semibold leading-tight text-slate-500">
-                    {extraOptions} options
-                  </span>
-                )}
-              </>
-            ) : (
-              <div className="flex h-[30px] min-w-[76px] items-center overflow-hidden rounded-lg bg-[#18A818] text-white shadow-md">
-                <button
-                  onClick={handleDecrement}
-                  aria-label="Decrease quantity"
-                  className="flex h-full w-7 cursor-pointer items-center justify-center transition-colors hover:bg-[#148F14] active:scale-90"
-                >
-                  <Minus className="h-3.5 w-3.5 stroke-[3]" />
-                </button>
-                <span
-                  ref={qtyRef}
-                  className="flex-1 px-1 text-center text-[13px] font-extrabold"
-                >
-                  {displayQuantity}
-                </span>
-                <button
-                  onClick={handleIncrement}
-                  disabled={isAtLimit}
-                  aria-label="Increase quantity"
-                  title={isAtLimit ? `Max ${maxQty} per order` : undefined}
-                  className={`flex h-full w-7 items-center justify-center transition-colors ${isAtLimit
-                      ? "cursor-not-allowed opacity-40"
-                      : "cursor-pointer hover:bg-[#148F14] active:scale-90"
-                    }`}
-                >
-                  <Plus className="h-3.5 w-3.5 stroke-[3]" />
-                </button>
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
-      {/* DETAILS: 4 compact rows */}
+      {/* DETAILS */}
       <Link
         href={productHref}
-        className="flex flex-col px-0.5 pt-3.5 cursor-pointer block"
+        prefetch={false}
+        className="mt-2 flex cursor-pointer flex-col px-0.5"
       >
-        {/* Row 1: brand + rating */}
-        <div className="flex min-h-[14px] items-center justify-between gap-1">
-          <span className="line-clamp-1 text-[9.5px] font-bold uppercase tracking-wider text-slate-400">
-            {brandName}
-          </span>
+        {/* Row 1: delivery time + rating */}
+        <div className="flex min-h-[16px] items-center justify-between gap-1">
+          {eta > 0 && !isOutOfStock ? (
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase leading-none tracking-wide text-slate-700">
+              <Timer className="h-3 w-3 shrink-0 text-[#18A818]" />
+              {eta} MINS
+            </span>
+          ) : (
+            <span />
+          )}
           {showRating && (
             <span
               className={`inline-flex shrink-0 items-center gap-0.5 rounded px-1 py-0.5 text-[9px] font-bold leading-none text-white ${isOutOfStock ? "bg-slate-400" : "bg-[#18A818]"
@@ -513,13 +456,15 @@ export function ProductCard({
         {/* Row 2: name */}
         <span
           title={product.name}
-          className={`mt-0.5 line-clamp-2 min-h-[30px] text-[12px] font-semibold leading-[15px] transition-colors ${isOutOfStock ? "text-slate-500" : "text-slate-800 group-hover:text-[#18A818]"
+          className={`mt-1.5 line-clamp-2 min-h-[36px] text-[14px] font-bold leading-[18px] transition-colors ${isOutOfStock
+            ? "text-slate-500"
+            : "text-slate-800 group-hover:text-[#18A818]"
             }`}
         >
           {product.name}
         </span>
 
-        {/* Row 3: unit + veg dot */}
+        {/* Row 3: veg dot + unit */}
         <div className="mt-0.5 flex items-center gap-1.5">
           {typeof p.is_veg === "boolean" && (
             <span
@@ -533,33 +478,107 @@ export function ProductCard({
               />
             </span>
           )}
-          <p className="truncate text-[11px] font-medium text-slate-500">
+          <p className="truncate text-[12px] font-medium text-slate-500">
             {unitText}
           </p>
         </div>
+      </Link>
 
-        {/* Row 4: price + low stock */}
-        <div className="mt-1.5 flex items-baseline justify-between gap-1">
-          <div className="flex flex-wrap items-baseline gap-x-1.5">
-            <span
-              className={`text-[15px] font-extrabold leading-none ${isOutOfStock ? "text-slate-500" : "text-slate-900"
-                }`}
-            >
-              {formatCurrency(product.price)}
+      {/* FOOTER: price (left) + ADD / stepper (right) */}
+      <div className="mt-3 flex items-end justify-between gap-1 px-0.5 pb-0.5">
+        <div className="flex min-w-0 flex-col">
+          <span
+            className={`text-[15px] font-extrabold leading-tight ${isOutOfStock ? "text-slate-500" : "text-green-600"
+              }`}
+          >
+            {formatCurrency(product.price)}
+          </span>
+          {hasMrp && (
+            <span className="text-[11px] font-medium leading-tight text-slate-400 line-through">
+              {formatCurrency(product.mrp)}
             </span>
-            {hasMrp && (
-              <span className="text-[11px] font-medium leading-none text-slate-400 line-through">
-                {formatCurrency(product.mrp)}
-              </span>
-            )}
-          </div>
+          )}
           {isLowStock && (
-            <span className="shrink-0 rounded bg-amber-100 px-1 py-0.5 text-[9px] font-bold leading-none text-amber-700">
+            <span className="mt-0.5 w-fit rounded bg-amber-100 px-1 py-0.5 text-[9px] font-bold leading-none text-amber-700">
               {availableStock} left
             </span>
           )}
         </div>
-      </Link>
+
+        <div onClick={stop} className="flex shrink-0 flex-col items-center">
+          {isOutOfStock ? (
+            <button
+              onClick={handleNotify}
+              disabled={notified}
+              aria-label={
+                notified
+                  ? "You will be notified"
+                  : `Notify me when ${product.name} is back`
+              }
+              className={`flex h-8 min-w-[72px] items-center justify-center gap-1 rounded-lg border px-2 text-[11px] font-extrabold uppercase tracking-wide transition-all duration-150 ${notified
+                ? "cursor-default border-[#18A818] bg-[#18A818] text-white"
+                : "cursor-pointer border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:text-slate-900 active:scale-95"
+                }`}
+            >
+              {notified ? (
+                <>
+                  <Check className="h-3.5 w-3.5 stroke-[3]" /> Done
+                </>
+              ) : (
+                <>
+                  <span ref={bellRef} className="inline-flex origin-top">
+                    <BellRing className="h-3.5 w-3.5" />
+                  </span>
+                  Notify
+                </>
+              )}
+            </button>
+          ) : displayQuantity === 0 ? (
+            <>
+              <button
+                onClick={handleAddToCart}
+                aria-label={`Add ${product.name} to cart`}
+                className="flex h-8 min-w-[72px] cursor-pointer items-center justify-center rounded-lg border border-[#18A818] bg-white px-3 text-[13px] font-extrabold uppercase tracking-wide text-[#18A818] transition-all duration-150 hover:bg-[#18A818] hover:text-white active:scale-90"
+              >
+                ADD
+              </button>
+              {extraOptions > 0 && (
+                <span className="mt-0.5 text-[8px] font-semibold leading-tight text-slate-500">
+                  {extraOptions} options
+                </span>
+              )}
+            </>
+          ) : (
+            <div className="flex h-8 min-w-[80px] items-center overflow-hidden rounded-lg bg-[#18A818] text-white shadow-sm">
+              <button
+                onClick={handleDecrement}
+                aria-label="Decrease quantity"
+                className="flex h-full w-7 cursor-pointer items-center justify-center transition-colors hover:bg-[#148F14] active:scale-90"
+              >
+                <Minus className="h-3.5 w-3.5 stroke-[3]" />
+              </button>
+              <span
+                ref={qtyRef}
+                className="flex-1 px-1 text-center text-[13px] font-extrabold"
+              >
+                {displayQuantity}
+              </span>
+              <button
+                onClick={handleIncrement}
+                disabled={isAtLimit}
+                aria-label="Increase quantity"
+                title={isAtLimit ? `Max ${maxQty} per order` : undefined}
+                className={`flex h-full w-7 items-center justify-center transition-colors ${isAtLimit
+                  ? "cursor-not-allowed opacity-40"
+                  : "cursor-pointer hover:bg-[#148F14] active:scale-90"
+                  }`}
+              >
+                <Plus className="h-3.5 w-3.5 stroke-[3]" />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

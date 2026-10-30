@@ -2,19 +2,17 @@ import { atom } from "jotai";
 import { DeliveryLocation } from "@/types/location";
 
 const defaultLocation: DeliveryLocation = {
-  area: "Bopal",
-  society: "South Bopal",
-  houseNo: "Shop No. 1",
-  landmark: "Near Bopal Lake",
-  formattedAddress: "Bopal, Ahmedabad, Gujarat 380058",
-  city: "Ahmedabad",
-  state: "Gujarat",
-  pincode: "380058",
-  coordinates: { latitude: 23.0345, longitude: 72.4682 },
-  deliveryEtaMinutes: 15,
-  isServiceable: true,
-  darkStoreId: "2a6ba8df-637f-4939-bc17-69ad6832c050",
-  darkStoreName: "Tiding Daily - Bopal",
+  area: "",
+  society: "",
+  houseNo: "",
+  landmark: "",
+  formattedAddress: "",
+  city: "",
+  state: "",
+  pincode: "",
+  coordinates: { latitude: 0, longitude: 0 },
+  deliveryEtaMinutes: 0,
+  isServiceable: false,
 };
 
 // Server-safe initial location for SSR and initial hydration parity

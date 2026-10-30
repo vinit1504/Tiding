@@ -8,3 +8,5 @@ export * from "./address-service";
 export * from "./coupon-service";
 export * from "./payment-service";
 export * from "./order-service";
+export * from "./banner-service";
+export * from "./wishlist-service";

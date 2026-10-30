@@ -19,7 +19,7 @@ import {
   ShieldCheck,
   AlertCircle,
 } from "lucide-react";
-import { AccountSidebar } from "@/components/account/account-sidebar";
+import { AccountLayout } from "@/components/account/account-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { userProfileAtom, authSessionAtom } from "@/stores";
@@ -135,13 +135,8 @@ export default function ProfilePage() {
   if (!mounted) return null;
 
   return (
-    <div className="min-h-[calc(100vh-80px)] bg-[#f4f6fb] py-6 sm:py-8">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row gap-6 items-start">
-        {/* Left Sidebar */}
-        <AccountSidebar activeTab="profile" />
-
-        {/* Right Content */}
-        <main className="flex-1 w-full bg-white rounded-2xl border border-gray-200/80 p-6 sm:p-8 space-y-6 shadow-xs">
+    <AccountLayout activeTab="profile">
+      <div className="w-full bg-white rounded-2xl border border-gray-200/80 p-6 sm:p-8 space-y-6 shadow-xs">
           {/* Header Row */}
           <div className="flex items-center justify-between border-b border-gray-100 pb-4">
             <div>
@@ -401,8 +396,7 @@ export default function ProfilePage() {
               </div>
             )}
           </div>
-        </main>
       </div>
-    </div>
+    </AccountLayout>
   );
 }

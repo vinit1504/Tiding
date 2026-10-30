@@ -51,9 +51,14 @@ export function ProductShelf({
   const scroll = (direction: "left" | "right") => {
     const el = scrollContainerRef.current;
     if (!el) return;
-    const scrollAmount = Math.max(300, el.clientWidth * 0.75);
+    const firstCard = el.firstElementChild as HTMLElement | null;
+    const cardWidth = firstCard?.offsetWidth || 185;
+    const style = window.getComputedStyle(el);
+    const gap = parseFloat(style.columnGap || style.gap || "20") || 20;
+    const scrollStep = cardWidth + gap;
+
     el.scrollBy({
-      left: direction === "left" ? -scrollAmount : scrollAmount,
+      left: direction === "left" ? -scrollStep : scrollStep,
       behavior: "smooth",
     });
   };
@@ -80,6 +85,7 @@ export function ProductShelf({
 
           <Link
             href={targetHref}
+            prefetch={false}
             className="flex items-center gap-0.5 text-xs sm:text-sm font-bold text-[#18A818] hover:text-[#148F14] transition-colors group"
           >
             <span>See All</span>
@@ -87,43 +93,43 @@ export function ProductShelf({
           </Link>
         </div>
 
-        {/* Scrollable Container with Floating Arrow Buttons */}
+        {/* Scrollable Container with Pure Icon Arrow Buttons */}
         <div className="relative group/shelf">
-          {/* Scroll Left Button */}
+          {/* Scroll Left Button: pure icon without background color */}
           {canScrollLeft && (
             <button
               onClick={() => scroll("left")}
               aria-label="Scroll left"
-              className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 z-20 w-9 h-9 rounded-full bg-slate-900/90 hover:bg-slate-900 text-white flex items-center justify-center shadow-lg transition-all active:scale-95 cursor-pointer hidden sm:flex"
+              className="absolute -left-3 sm:-left-5 top-1/2 -translate-y-1/2 z-20 text-slate-700 hover:text-[#18A818] transition-all hover:scale-125 active:scale-90 cursor-pointer hidden sm:flex items-center justify-center p-1"
             >
-              <ChevronLeft className="w-5 h-5" />
+              <ChevronLeft className="w-8 h-8 stroke-[2.5]" />
             </button>
           )}
 
-          {/* Cards Track: 8 items in a single line on desktop */}
+          {/* Cards Track: one-by-one snap scroll with proper size and balanced spacing */}
           <div
             ref={scrollContainerRef}
-            className="flex gap-2.5 sm:gap-3 xl:gap-3.5 overflow-x-auto no-scrollbar scroll-smooth py-1 px-0.5"
+            className="flex gap-4 lg:gap-5 overflow-x-auto no-scrollbar scroll-smooth snap-x snap-mandatory py-2 px-1"
             style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
           >
             {products.map((product) => (
               <div
                 key={product.id}
-                className="w-[120px] sm:w-[130px] md:w-[138px] shrink-0"
+                className="w-[155px] sm:w-[calc((100%-2*16px)/3)] md:w-[calc((100%-3*16px)/4)] lg:w-[calc((100%-4*20px)/5)] xl:w-[calc((100%-5*20px)/6)] shrink-0 snap-start"
               >
                 <ProductCard product={product} />
               </div>
             ))}
           </div>
 
-          {/* Scroll Right Button (matches Zepto round black button) */}
+          {/* Scroll Right Button: pure icon without background color */}
           {canScrollRight && (
             <button
               onClick={() => scroll("right")}
               aria-label="Scroll right"
-              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 z-20 w-9 h-9 rounded-full bg-slate-900/90 hover:bg-slate-900 text-white flex items-center justify-center shadow-lg transition-all active:scale-95 cursor-pointer hidden sm:flex"
+              className="absolute -right-3 sm:-right-5 top-1/2 -translate-y-1/2 z-20 text-slate-700 hover:text-[#18A818] transition-all hover:scale-125 active:scale-90 cursor-pointer hidden sm:flex items-center justify-center p-1"
             >
-              <ChevronRight className="w-5 h-5" />
+              <ChevronRight className="w-8 h-8 stroke-[2.5]" />
             </button>
           )}
         </div>

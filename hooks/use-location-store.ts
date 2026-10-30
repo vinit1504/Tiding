@@ -117,8 +117,8 @@ export function useLocationStore() {
         }
 
         return currentLocation;
-      } catch (err) {
-        console.error("resolveServingStore failed:", err);
+      } catch (err: any) {
+        console.warn("resolveServingStore notice:", err?.message || err);
         toast.error("Failed to resolve nearby store. Using default delivery zone.");
         return currentLocation;
       } finally {

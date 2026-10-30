@@ -19,6 +19,16 @@ export const QUERY_KEYS = {
   },
   LOCATION: {
     ALL: ["location"] as const,
+    COUNTRIES: (params?: Record<string, unknown>) => [...QUERY_KEYS.LOCATION.ALL, "countries", params] as const,
+    STATES: (countryId?: string, params?: Record<string, unknown>) =>
+      [...QUERY_KEYS.LOCATION.ALL, "states", countryId, params] as const,
+    CITIES: (stateId?: string, params?: Record<string, unknown>) =>
+      [...QUERY_KEYS.LOCATION.ALL, "cities", stateId, params] as const,
+    PINCODES: (cityId?: string, params?: Record<string, unknown>) =>
+      [...QUERY_KEYS.LOCATION.ALL, "pincodes", cityId, params] as const,
+    AREAS: (params?: Record<string, unknown>) => [...QUERY_KEYS.LOCATION.ALL, "areas", params] as const,
+    AREA_BY_SLUG: (slug: string) => [...QUERY_KEYS.LOCATION.ALL, "area-slug", slug] as const,
+    AREA_BY_ID: (id: string) => [...QUERY_KEYS.LOCATION.ALL, "area-id", id] as const,
     GEOCODE: (lat: number, lng: number) => [...QUERY_KEYS.LOCATION.ALL, "geocode", lat, lng] as const,
     SERVICE_AREA: (pincode: string) => [...QUERY_KEYS.LOCATION.ALL, "service-area", pincode] as const,
     DARK_STORES: () => [...QUERY_KEYS.LOCATION.ALL, "dark-stores"] as const,
@@ -61,13 +71,20 @@ export const QUERY_KEYS = {
   },
   WISHLISTS: {
     ALL: ["wishlists"] as const,
+    CUSTOMER: (params?: Record<string, unknown>) => [...QUERY_KEYS.WISHLISTS.ALL, "customer", params] as const,
+    IDS: () => [...QUERY_KEYS.WISHLISTS.ALL, "ids"] as const,
     MY: () => [...QUERY_KEYS.WISHLISTS.ALL, "my"] as const,
     DEFAULT: () => [...QUERY_KEYS.WISHLISTS.ALL, "default"] as const,
     DETAIL: (id: string) => [...QUERY_KEYS.WISHLISTS.ALL, "detail", id] as const,
+    PUBLIC: (token: string) => [...QUERY_KEYS.WISHLISTS.ALL, "public", token] as const,
   },
   REVIEWS: {
     ALL: ["reviews"] as const,
     PRODUCT: (productId: string) => [...QUERY_KEYS.REVIEWS.ALL, "product", productId] as const,
     MY: () => [...QUERY_KEYS.REVIEWS.ALL, "my"] as const,
+  },
+  CMS: {
+    ALL: ["cms"] as const,
+    BANNERS: (filters?: Record<string, unknown>) => [...QUERY_KEYS.CMS.ALL, "banners", filters] as const,
   },
 } as const;

@@ -8,7 +8,10 @@ import { deliveryLocationAtom } from "@/stores/location-atom";
 import { CatalogCategory, CatalogSubcategory, CatalogBrand } from "@/types/catalog";
 import { Product } from "@/types/product";
 import { SubcategorySidebar } from "./subcategory-sidebar";
-import { ProductCard } from "@/components/product/product-card";
+import {
+  ProductCard,
+  ProductCardSkeleton,
+} from "@/components/product/product-card";
 import {
   useCategoriesQuery,
   useInfiniteSubcategoriesQuery,
@@ -32,18 +35,6 @@ interface CategoryPlpViewProps {
 }
 
 const itemsLabel = (n: number) => `${n} ${n === 1 ? "item" : "items"}`;
-
-function ProductSkeleton() {
-  return (
-    <div className="w-full max-w-[150px] animate-pulse">
-      <div className="aspect-square w-full rounded-2xl bg-slate-100 dark:bg-neutral-800" />
-      <div className="mt-4 h-2.5 w-10 rounded bg-slate-100 dark:bg-neutral-800" />
-      <div className="mt-2 h-3 w-full rounded bg-slate-100 dark:bg-neutral-800" />
-      <div className="mt-1 h-3 w-2/3 rounded bg-slate-100 dark:bg-neutral-800" />
-      <div className="mt-2 h-4 w-14 rounded bg-slate-100 dark:bg-neutral-800" />
-    </div>
-  );
-}
 
 export function CategoryPlpView({
   category,
@@ -230,17 +221,17 @@ export function CategoryPlpView({
     return [...products].sort((a, b) => Number(isOut(a)) - Number(isOut(b)));
   }, [products]);
 
-  // Clean URL
+  // Clean URL without triggering full server component re-fetches
   useEffect(() => {
-    if (searchParams.has("categoryId") || searchParams.has("category_id")) {
-      const cleanParams = new URLSearchParams();
-      if (subParam) {
-        cleanParams.set("sub", subParam);
-      }
+    if (typeof window !== "undefined" && (searchParams.has("categoryId") || searchParams.has("category_id"))) {
+      const cleanParams = new URLSearchParams(searchParams.toString());
+      cleanParams.delete("categoryId");
+      cleanParams.delete("category_id");
       const query = cleanParams.toString();
-      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+      const newUrl = query ? `${pathname}?${query}` : pathname;
+      window.history.replaceState(null, "", newUrl);
     }
-  }, [pathname, searchParams, subParam, router]);
+  }, [pathname, searchParams]);
 
   const handleSelectSubcategory = (subId: string, slug: string) => {
     const cleanSub = slug || subId;
@@ -308,8 +299,9 @@ export function CategoryPlpView({
   ).length;
   const inStockCount = displayProducts.length - outOfStockCount;
 
+  // 7 cards per row on desktop (lg+), with reduced space between cards to eliminate dead space
   const gridClass =
-    "grid grid-cols-[repeat(auto-fill,minmax(130px,150px))] justify-center gap-x-3 gap-y-7 sm:justify-start sm:gap-x-4 md:gap-x-5";
+    "grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2 md:grid-cols-4 md:gap-2 lg:grid-cols-7 gap-y-3 sm:gap-y-3.5 [&>*]:min-w-0";
 
   return (
     <div
@@ -334,11 +326,11 @@ export function CategoryPlpView({
           <div
             ref={panelRef}
             onScroll={handleScroll}
-            className="h-full overflow-y-auto bg-[#FBFCFB] px-3.5 pb-24 dark:bg-neutral-900 sm:px-5 md:px-6"
+            className="h-full overflow-y-auto bg-[#F6F8F6] px-2.5 pb-24 dark:bg-neutral-900 sm:px-4 md:px-5"
           >
             {/* STICKY HEADER (gets compact when you scroll) */}
             <div
-              className={`sticky top-0 z-30 -mx-3.5 mb-5 border-b border-slate-100 bg-white/90 px-3.5 backdrop-blur-md transition-all duration-300 dark:border-neutral-800 dark:bg-neutral-900/90 sm:-mx-5 sm:px-5 md:-mx-6 md:px-6 ${scrolled
+              className={`sticky top-0 z-30 -mx-2.5 mb-3 border-b border-slate-100 bg-white/90 px-2.5 backdrop-blur-md transition-all duration-300 dark:border-neutral-800 dark:bg-neutral-900/90 sm:-mx-4 sm:mb-4 sm:px-4 md:-mx-5 md:px-5 ${scrolled
                   ? "py-2 shadow-[0_6px_16px_-10px_rgba(15,23,42,0.25)]"
                   : "pb-3.5 pt-3.5 sm:pt-5"
                 }`}
@@ -355,6 +347,7 @@ export function CategoryPlpView({
                 <ChevronRight className="h-3 w-3 shrink-0" />
                 <Link
                   href={`/category/${resolvedCategory.slug}`}
+                  prefetch={false}
                   className="max-w-[40%] truncate hover:text-[#18A818]"
                 >
                   {resolvedCategory.name}
@@ -435,7 +428,7 @@ export function CategoryPlpView({
             {isProductsLoading ? (
               <div className={gridClass}>
                 {Array.from({ length: 14 }).map((_, i) => (
-                  <ProductSkeleton key={i} />
+                  <ProductCardSkeleton key={i} />
                 ))}
               </div>
             ) : displayProducts.length > 0 ? (

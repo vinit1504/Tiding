@@ -388,7 +388,7 @@ export class AuthService {
     const token = this.getAccessToken();
     if (!token) return null;
 
-    if (token === "token_vinit_default" || !token.includes(".")) {
+    if (token === "token_vinit_default") {
       return null;
     }
 
@@ -425,12 +425,14 @@ export class AuthService {
         }
 
         const json = await res.json().catch(() => null);
-        if (res.ok && json?.success && json?.data) {
-          const rawUser = json.data;
-          const fallbackContact = rawUser.email || rawUser.phone || "User";
-          const profile = parseBackendUserToProfile(rawUser, fallbackContact);
-          setStoredUser(profile);
-          return profile;
+        if (res.ok && json) {
+          const rawUser = json.data || json.user || (json.id ? json : null);
+          if (rawUser) {
+            const fallbackContact = rawUser.email || rawUser.phone || "User";
+            const profile = parseBackendUserToProfile(rawUser, fallbackContact);
+            setStoredUser(profile);
+            return profile;
+          }
         }
         return null;
       } catch (err) {

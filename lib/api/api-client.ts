@@ -1,10 +1,25 @@
 import { SITE_CONFIG } from "@/lib/constants/site-config";
 import { getStoredAccessToken } from "@/lib/auth/token-storage";
 
+export class ApiError extends Error {
+  public status: number;
+  public data?: any;
+  public isApiError = true;
+
+  constructor(message: string, status: number = 500, data?: any) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.data = data;
+    Object.setPrototypeOf(this, ApiError.prototype);
+  }
+}
+
 export interface RequestOptions<T = unknown> {
   headers?: Record<string, string>;
   fallbackData?: T;
   cache?: RequestCache;
+  timeoutMs?: number;
 }
 
 class ApiClient {
@@ -47,13 +62,14 @@ class ApiClient {
 
   /**
    * Internal request handler that handles Authorization headers,
-   * intercepts 401 Unauthorized, runs refresh token, and retries the request.
+   * intercepts 401 Unauthorized, runs refresh token, timeout aborts, and retries the request.
    */
   private async request(
     endpoint: string,
     init: RequestInit,
     customHeaders?: Record<string, string>,
-    isRetry = false
+    isRetry = false,
+    timeoutMs = 25000
   ): Promise<Response> {
     const defaultHeaders = this.getDefaultHeaders();
     const headers: Record<string, string> = {
@@ -61,30 +77,44 @@ class ApiClient {
       ...(customHeaders || {}),
     };
 
-    const res = await fetch(`${this.baseUrl}${endpoint}`, {
-      ...init,
-      headers,
-      credentials: "include", // Required for cross-origin cookie authentication
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-    // If 401 Unauthorized, attempt token refresh and retry once
-    if (res.status === 401 && !isRetry && !endpoint.startsWith("/auth/")) {
-      const newAccessToken = await this.refreshToken();
-      if (newAccessToken) {
-        // Retry the original request with the new access token
-        return this.request(
-          endpoint,
-          init,
-          {
-            ...(customHeaders || {}),
-            Authorization: `Bearer ${newAccessToken}`,
-          },
-          true
-        );
+    try {
+      const res = await fetch(`${this.baseUrl}${endpoint}`, {
+        ...init,
+        headers,
+        credentials: "include", // Required for cross-origin cookie authentication
+        signal: init.signal || controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      // If 401 Unauthorized, attempt token refresh and retry once
+      if (res.status === 401 && !isRetry && !endpoint.startsWith("/auth/")) {
+        const newAccessToken = await this.refreshToken();
+        if (newAccessToken) {
+          // Retry the original request with the new access token
+          return this.request(
+            endpoint,
+            init,
+            {
+              ...(customHeaders || {}),
+              Authorization: `Bearer ${newAccessToken}`,
+            },
+            true,
+            timeoutMs
+          );
+        }
       }
-    }
 
-    return res;
+      return res;
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      if (err.name === "AbortError" || err?.message?.includes("aborted")) {
+        throw new ApiError("Request execution timed out. The server took too long to respond.", 504);
+      }
+      throw err;
+    }
   }
 
   /**
@@ -115,7 +145,7 @@ class ApiClient {
         }
         return null;
       } catch (err) {
-        console.error("[ApiClient] Token refresh failed:", err);
+        console.warn("[ApiClient] Token refresh notice:", err);
         return null;
       } finally {
         this.refreshPromise = null;
@@ -127,12 +157,22 @@ class ApiClient {
 
   private async extractErrorMessage(res: Response): Promise<string> {
     try {
-      const json = await res.json();
-      if (json?.error?.details && Array.isArray(json.error.details) && json.error.details.length > 0) {
-        const detailsStr = json.error.details.map((d: any) => `${d.field ? d.field + ": " : ""}${d.message}`).join(", ");
-        return `${json.error.message || "Validation failed"}: ${detailsStr}`;
+      const text = await res.text();
+      try {
+        const json = JSON.parse(text);
+        if (json?.error?.details && Array.isArray(json.error.details) && json.error.details.length > 0) {
+          const detailsStr = json.error.details
+            .map((d: any) => `${d.field ? d.field + ": " : ""}${d.message}`)
+            .join(", ");
+          return `${json.error.message || "Validation failed"}: ${detailsStr}`;
+        }
+        return json?.error?.message || json?.message || `HTTP error! status: ${res.status}`;
+      } catch {
+        if (res.status === 504 || res.status === 408) {
+          return "Request execution timed out. The server took too long to respond.";
+        }
+        return `HTTP error! status: ${res.status}`;
       }
-      return json?.error?.message || json?.message || `HTTP error! status: ${res.status}`;
     } catch {
       return `HTTP error! status: ${res.status}`;
     }
@@ -157,12 +197,14 @@ class ApiClient {
           method: "GET",
           cache: options.cache || "no-store",
         },
-        options.headers
+        options.headers,
+        false,
+        options.timeoutMs
       );
 
       if (!res.ok) {
         const errorMsg = await this.extractErrorMessage(res);
-        throw new Error(errorMsg);
+        throw new ApiError(errorMsg, res.status);
       }
       const json = await res.json();
       return json.data !== undefined ? json.data : json;
@@ -196,12 +238,14 @@ class ApiClient {
           method: "GET",
           cache: options.cache || "no-store",
         },
-        options.headers
+        options.headers,
+        false,
+        options.timeoutMs
       );
 
       if (!res.ok) {
         const errorMsg = await this.extractErrorMessage(res);
-        throw new Error(errorMsg);
+        throw new ApiError(errorMsg, res.status);
       }
       const json = await res.json();
       return {
@@ -238,12 +282,14 @@ class ApiClient {
           method: "POST",
           body: JSON.stringify(body),
         },
-        options.headers
+        options.headers,
+        false,
+        options.timeoutMs
       );
 
       if (!res.ok) {
         const errorMsg = await this.extractErrorMessage(res);
-        throw new Error(errorMsg);
+        throw new ApiError(errorMsg, res.status);
       }
       const json = await res.json();
       return json.data !== undefined ? json.data : json;
@@ -267,12 +313,14 @@ class ApiClient {
           method: "PATCH",
           body: JSON.stringify(body),
         },
-        options?.headers
+        options?.headers,
+        false,
+        options?.timeoutMs
       );
 
       if (!res.ok) {
         const errorMsg = await this.extractErrorMessage(res);
-        throw new Error(errorMsg);
+        throw new ApiError(errorMsg, res.status);
       }
       const json = await res.json();
       return json.data !== undefined ? json.data : json;
@@ -291,12 +339,14 @@ class ApiClient {
         {
           method: "DELETE",
         },
-        options?.headers
+        options?.headers,
+        false,
+        options?.timeoutMs
       );
 
       if (!res.ok) {
         const errorMsg = await this.extractErrorMessage(res);
-        throw new Error(errorMsg);
+        throw new ApiError(errorMsg, res.status);
       }
       const json = await res.json();
       return json.data !== undefined ? json.data : json;

@@ -19,7 +19,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { AccountSidebar } from "@/components/account/account-sidebar";
+import { AccountLayout } from "@/components/account/account-layout";
 import { AddressModal } from "@/components/account/address-modal";
 import {
   userProfileAtom,
@@ -37,6 +37,8 @@ import {
 } from "@/queries/customer/use-address-queries";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { isUuid } from "@/lib/api/catalog-service";
+import { locationService } from "@/lib/api/location-service";
 
 export default function AddressesPage() {
   const [user, setUser] = useAtom(userProfileAtom);
@@ -95,6 +97,16 @@ export default function AddressesPage() {
       if (editingAddress) {
         // Backend Update
         if (editingAddress.id && !editingAddress.id.startsWith("addr-")) {
+          const resolved = await locationService.resolveHierarchyUuids({
+            areaId: data.areaId || editingAddress.areaId,
+            cityId: data.cityId || editingAddress.cityId,
+            stateId: data.stateId || editingAddress.stateId,
+            countryId: data.countryId || editingAddress.countryId,
+            pincodeId: data.pincodeId || editingAddress.pincodeId,
+            areaName: data.area || editingAddress.area,
+            cityName: data.city || editingAddress.city,
+          });
+
           await updateAddressMutation.mutateAsync({
             addressId: editingAddress.id,
             payload: {
@@ -103,27 +115,64 @@ export default function AddressesPage() {
               address_line_1: data.addressLine || "House",
               address_type: (data.type?.toUpperCase() === "WORK" ? "WORK" : "HOME") as any,
               landmark: data.landmark || null,
+              area_id: isUuid(resolved.areaId) ? resolved.areaId! : undefined,
+              city_id: isUuid(resolved.cityId) ? resolved.cityId! : undefined,
+              state_id: isUuid(resolved.stateId) ? resolved.stateId! : undefined,
+              country_id: isUuid(resolved.countryId) ? resolved.countryId! : undefined,
+              pincode_id: isUuid(resolved.pincodeId) ? resolved.pincodeId! : null,
             },
           });
         }
         toast.success("Address updated successfully!");
       } else {
         // Backend Create
-        await createAddressMutation.mutateAsync({
-          address_type: (data.type?.toUpperCase() === "WORK" ? "WORK" : "HOME") as any,
-          recipient_name: data.receiverName || user?.name || "Customer",
-          recipient_phone: data.receiverPhone || user?.phone || "9876543210",
-          address_line_1: data.addressLine || "House",
-          area_id: "feacf6d2-53e1-40de-af4e-ddc1404c0fb7",
-          city_id: "e4f80d05-6ce3-40c3-9d12-3ad6dc29bac9",
-          state_id: "05efa890-b84c-44ed-b312-9ba531814aeb",
-          country_id: "bb1942fd-ab4f-48a9-999f-6cebcd644e68",
-          is_default: addresses.length === 0,
+        const resolved = await locationService.resolveHierarchyUuids({
+          areaId: data.areaId,
+          cityId: data.cityId,
+          stateId: data.stateId,
+          countryId: data.countryId,
+          pincodeId: data.pincodeId,
+          areaName: data.area,
+          cityName: data.city,
         });
-        toast.success("New address added successfully!");
+
+        if (
+          isUuid(resolved.areaId) &&
+          isUuid(resolved.cityId) &&
+          isUuid(resolved.stateId) &&
+          isUuid(resolved.countryId)
+        ) {
+          await createAddressMutation.mutateAsync({
+            address_type: (data.type?.toUpperCase() === "WORK" ? "WORK" : "HOME") as any,
+            recipient_name: data.receiverName || user?.name || "Customer",
+            recipient_phone: data.receiverPhone || user?.phone || "9876543210",
+            address_line_1: data.addressLine || "House",
+            area_id: resolved.areaId!,
+            city_id: resolved.cityId!,
+            state_id: resolved.stateId!,
+            country_id: resolved.countryId!,
+            pincode_id: isUuid(resolved.pincodeId) ? resolved.pincodeId! : null,
+            is_default: addresses.length === 0,
+          });
+          toast.success("New address added successfully!");
+        } else {
+          // If valid UUIDs could not be found, fall back to local device storage without throwing 400
+          toast.info("Address saved to device for local delivery.");
+          const newAddress = { ...data, id: `addr-${Date.now()}` } as SavedAddress;
+          const updated = [newAddress, ...addresses];
+          if (user) {
+            const updatedUser = { ...user, savedAddresses: updated };
+            setUser(updatedUser);
+            try {
+              localStorage.setItem("tiding_user", JSON.stringify(updatedUser));
+            } catch {}
+          }
+          return;
+        }
       }
     } catch (err: any) {
       console.warn("Backend address operation failed, applying local fallback:", err);
+      toast.error(err?.message || "Server sync failed. Saved to device.");
       // Local fallback
       let updated: SavedAddress[];
       if (editingAddress) {
@@ -201,13 +250,8 @@ export default function AddressesPage() {
   if (!mounted) return null;
 
   return (
-    <div className="min-h-[calc(100vh-80px)] bg-[#f4f6fb] py-6 sm:py-8">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row gap-6 items-start">
-        {/* Left Sidebar matching Screenshot 3 */}
-        <AccountSidebar activeTab="addresses" />
-
-        {/* Right Content Panel matching Screenshot 3 */}
-        <main className="flex-1 bg-white rounded-2xl border border-gray-200/80 p-6 sm:p-8 space-y-6 shadow-xs">
+    <AccountLayout activeTab="addresses">
+      <div className="bg-white rounded-2xl border border-gray-200/80 p-6 sm:p-8 space-y-6 shadow-xs">
           {/* Header Row: My addresses & + Add new address */}
           <div className="flex items-center justify-between border-b border-gray-100 pb-4">
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
@@ -307,7 +351,6 @@ export default function AddressesPage() {
               );
             })}
           </div>
-        </main>
       </div>
 
       {/* Enter Complete Address Modal matching Screenshot 2 */}
@@ -317,6 +360,6 @@ export default function AddressesPage() {
         onSave={handleSaveModal}
         initialData={editingAddress}
       />
-    </div>
+    </AccountLayout>
   );
 }

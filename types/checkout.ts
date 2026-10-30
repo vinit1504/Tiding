@@ -103,6 +103,8 @@ export interface CheckoutWithItems extends CheckoutRecord {
 export interface InitiateCheckoutDto {
   notes?: string;
   idempotencyKey?: string;
+  storeId?: string;
+  store_id?: string;
 }
 
 export interface SelectAddressDto {

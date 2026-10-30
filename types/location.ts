@@ -32,8 +32,57 @@ export interface SavedAddress {
   area: string;
   city: string;
   pincode: string;
+  countryId?: string;
+  stateId?: string;
+  cityId?: string;
+  pincodeId?: string;
+  areaId?: string;
+  stateName?: string;
+  countryName?: string;
   coordinates?: GeoCoordinates;
   isDefault: boolean;
   receiverName?: string;
   receiverPhone?: string;
 }
+
+export interface CountryItem {
+  id: string;
+  name: string;
+  code: string;
+  dial_code?: string;
+  is_active?: boolean;
+}
+
+export interface StateItem {
+  id: string;
+  country_id: string;
+  name: string;
+  code?: string;
+  is_active?: boolean;
+}
+
+export interface CityItem {
+  id: string;
+  state_id: string;
+  name: string;
+  is_active?: boolean;
+}
+
+export interface PincodeItem {
+  id: string;
+  city_id: string;
+  code: string;
+  is_active?: boolean;
+}
+
+export interface AreaItem {
+  id: string;
+  city_id?: string;
+  pincode_id?: string;
+  name: string;
+  slug?: string;
+  latitude?: string | number;
+  longitude?: string | number;
+  is_active?: boolean;
+}
+

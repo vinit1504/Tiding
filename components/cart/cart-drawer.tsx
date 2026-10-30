@@ -372,8 +372,11 @@ export function CartDrawer() {
                     Your Basket Items ({cartCount})
                   </p>
                   <div className="divide-y divide-[var(--border-light)] rounded-xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
-                    {items.map((item) => (
-                      <div key={item.id} className="p-3 space-y-2">
+                    {items.map((item, idx) => (
+                      <div
+                        key={item.cartItemId ? `cart-${item.cartItemId}` : `cart-${item.id || item.variantId || item.productId}-${idx}`}
+                        className="p-3 space-y-2"
+                      >
                         <div className="flex items-center justify-between gap-3">
                           {/* Thumbnail */}
                           <div className="relative h-14 w-14 rounded-lg overflow-hidden bg-[var(--surface-secondary)] shrink-0 border border-[var(--border)]">
@@ -830,8 +833,11 @@ export function CartDrawer() {
                     Saved Items ({savedCount})
                   </p>
                   <div className="divide-y divide-[var(--border-light)] rounded-xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
-                    {savedItems.map((item) => (
-                      <div key={item.id} className="p-3 space-y-2">
+                    {savedItems.map((item, idx) => (
+                      <div
+                        key={item.cartItemId ? `saved-${item.cartItemId}` : `saved-${item.id || item.variantId || item.productId}-${idx}`}
+                        className="p-3 space-y-2"
+                      >
                         <div className="flex items-center justify-between gap-3">
                           <div className="relative h-14 w-14 rounded-lg overflow-hidden bg-[var(--surface-secondary)] shrink-0 border border-[var(--border)]">
                             <SafeImage

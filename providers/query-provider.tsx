@@ -13,6 +13,12 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
             refetchOnWindowFocus: false,
             retry: 1,
           },
+          mutations: {
+            retry: 0,
+            onError: (err) => {
+              console.warn("[Mutation notice]:", (err as any)?.message || err);
+            },
+          },
         },
       })
   );

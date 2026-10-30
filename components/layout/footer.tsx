@@ -87,8 +87,8 @@ export function Footer() {
               </ul>
 
               <ul className="space-y-2.5">
-                <li><Link href="/category/fruits-vegetables" className="hover:text-[#18A818] transition-colors">Recipes</Link></li>
-                <li><Link href="/category/dairy-breakfast" className="hover:text-[#18A818] transition-colors">Bistro</Link></li>
+                <li><Link href="/category/fruits-vegetables" prefetch={false} className="hover:text-[#18A818] transition-colors">Recipes</Link></li>
+                <li><Link href="/category/dairy-breakfast" prefetch={false} className="hover:text-[#18A818] transition-colors">Bistro</Link></li>
                 <li><Link href="/delivery-areas" className="hover:text-[#18A818] transition-colors">District</Link></li>
                 <li><Link href="/about" className="hover:text-[#18A818] transition-colors">Ambulance</Link></li>
                 <li><Link href="/about" className="hover:text-[#18A818] transition-colors">Feeding Hope</Link></li>
@@ -113,42 +113,42 @@ export function Footer() {
 
             <div className="grid grid-cols-3 gap-3 sm:gap-4 leading-relaxed">
               <ul className="space-y-2.5">
-                <li><Link href="/category/fruits-vegetables" className="hover:text-[#18A818] transition-colors">Vegetables & Fruits</Link></li>
-                <li><Link href="/category/dairy-breakfast" className="hover:text-[#18A818] transition-colors">Dairy, Bread & Eggs</Link></li>
-                <li><Link href="/category/atta-rice-dal" className="hover:text-[#18A818] transition-colors">Atta, Rice & Dal</Link></li>
-                <li><Link href="/category/bakery-biscuits" className="hover:text-[#18A818] transition-colors">Bakery & Biscuits</Link></li>
-                <li><Link href="/category/snacks-munchies" className="hover:text-[#18A818] transition-colors">Snacks & Munchies</Link></li>
-                <li><Link href="/category/cold-drinks-juices" className="hover:text-[#18A818] transition-colors">Drinks & Juices</Link></li>
-                <li><Link href="/category/tea-coffee-milk-drinks" className="hover:text-[#18A818] transition-colors">Tea, Coffee & Drinks</Link></li>
-                <li><Link href="/category/breakfast-instant-food" className="hover:text-[#18A818] transition-colors">Instant Food</Link></li>
-                <li><Link href="/category/sweet-tooth" className="hover:text-[#18A818] transition-colors">Sweets & Chocolates</Link></li>
-                <li><Link href="/category/atta-rice-dal" className="hover:text-[#18A818] transition-colors">Oil, Ghee & Masala</Link></li>
+                <li><Link href="/category/fruits-vegetables" prefetch={false} className="hover:text-[#18A818] transition-colors">Vegetables & Fruits</Link></li>
+                <li><Link href="/category/dairy-breakfast" prefetch={false} className="hover:text-[#18A818] transition-colors">Dairy, Bread & Eggs</Link></li>
+                <li><Link href="/category/atta-rice-dal" prefetch={false} className="hover:text-[#18A818] transition-colors">Atta, Rice & Dal</Link></li>
+                <li><Link href="/category/bakery-biscuits" prefetch={false} className="hover:text-[#18A818] transition-colors">Bakery & Biscuits</Link></li>
+                <li><Link href="/category/snacks-munchies" prefetch={false} className="hover:text-[#18A818] transition-colors">Snacks & Munchies</Link></li>
+                <li><Link href="/category/cold-drinks-juices" prefetch={false} className="hover:text-[#18A818] transition-colors">Drinks & Juices</Link></li>
+                <li><Link href="/category/tea-coffee-milk-drinks" prefetch={false} className="hover:text-[#18A818] transition-colors">Tea, Coffee & Drinks</Link></li>
+                <li><Link href="/category/breakfast-instant-food" prefetch={false} className="hover:text-[#18A818] transition-colors">Instant Food</Link></li>
+                <li><Link href="/category/sweet-tooth" prefetch={false} className="hover:text-[#18A818] transition-colors">Sweets & Chocolates</Link></li>
+                <li><Link href="/category/atta-rice-dal" prefetch={false} className="hover:text-[#18A818] transition-colors">Oil, Ghee & Masala</Link></li>
               </ul>
 
               <ul className="space-y-2.5">
-                <li><Link href="/category/pharma-wellness" className="hover:text-[#18A818] transition-colors">Bath & Body</Link></li>
-                <li><Link href="/category/pharma-wellness" className="hover:text-[#18A818] transition-colors">Beauty & Cosmetics</Link></li>
-                <li><Link href="/category/pharma-wellness" className="hover:text-[#18A818] transition-colors">Health & Pharma</Link></li>
-                <li><Link href="/category/cleaners-repellents" className="hover:text-[#18A818] transition-colors">Cleaners & Repellents</Link></li>
-                <li><Link href="/category/home-lifestyle" className="hover:text-[#18A818] transition-colors">Home & Lifestyle</Link></li>
-                <li><Link href="/category/paan-corner" className="hover:text-[#18A818] transition-colors">Paan Corner</Link></li>
-                <li><Link href="/category/baby-care" className="hover:text-[#18A818] transition-colors">Baby Care</Link></li>
-                <li><Link href="/category/pet-care" className="hover:text-[#18A818] transition-colors">Pet Care Supplies</Link></li>
-                <li><Link href="/category/home-lifestyle" className="hover:text-[#18A818] transition-colors">Kitchenware & Tools</Link></li>
-                <li><Link href="/category/home-lifestyle" className="hover:text-[#18A818] transition-colors">Print Store & Station</Link></li>
+                <li><Link href="/category/pharma-wellness" prefetch={false} className="hover:text-[#18A818] transition-colors">Bath & Body</Link></li>
+                <li><Link href="/category/pharma-wellness" prefetch={false} className="hover:text-[#18A818] transition-colors">Beauty & Cosmetics</Link></li>
+                <li><Link href="/category/pharma-wellness" prefetch={false} className="hover:text-[#18A818] transition-colors">Health & Pharma</Link></li>
+                <li><Link href="/category/cleaners-repellents" prefetch={false} className="hover:text-[#18A818] transition-colors">Cleaners & Repellents</Link></li>
+                <li><Link href="/category/home-lifestyle" prefetch={false} className="hover:text-[#18A818] transition-colors">Home & Lifestyle</Link></li>
+                <li><Link href="/category/paan-corner" prefetch={false} className="hover:text-[#18A818] transition-colors">Paan Corner</Link></li>
+                <li><Link href="/category/baby-care" prefetch={false} className="hover:text-[#18A818] transition-colors">Baby Care</Link></li>
+                <li><Link href="/category/pet-care" prefetch={false} className="hover:text-[#18A818] transition-colors">Pet Care Supplies</Link></li>
+                <li><Link href="/category/home-lifestyle" prefetch={false} className="hover:text-[#18A818] transition-colors">Kitchenware & Tools</Link></li>
+                <li><Link href="/category/home-lifestyle" prefetch={false} className="hover:text-[#18A818] transition-colors">Print Store & Station</Link></li>
               </ul>
 
               <ul className="space-y-2.5">
-                <li><Link href="/category/pharma-wellness" className="hover:text-[#18A818] transition-colors">Skin & Face</Link></li>
-                <li><Link href="/category/pharma-wellness" className="hover:text-[#18A818] transition-colors">Hair Care</Link></li>
-                <li><Link href="/category/pharma-wellness" className="hover:text-[#18A818] transition-colors">Feminine Hygiene</Link></li>
-                <li><Link href="/category/pharma-wellness" className="hover:text-[#18A818] transition-colors">Sexual Wellness</Link></li>
-                <li><Link href="/category/sweet-tooth" className="hover:text-[#18A818] transition-colors">Ice Creams & More</Link></li>
-                <li><Link href="/category/snacks-munchies" className="hover:text-[#18A818] transition-colors">Sauces & Spreads</Link></li>
-                <li><Link href="/category/meat-fish" className="hover:text-[#18A818] transition-colors">Chicken, Meat & Fish</Link></li>
-                <li><Link href="/category/home-lifestyle" className="hover:text-[#18A818] transition-colors">Electronics & Cords</Link></li>
-                <li><Link href="/category/sweet-tooth" className="hover:text-[#18A818] transition-colors">Festive & Gift Packs</Link></li>
-                <li><Link href="/wallet" className="hover:text-[#18A818] transition-colors">E-Gift Cards</Link></li>
+                <li><Link href="/category/pharma-wellness" prefetch={false} className="hover:text-[#18A818] transition-colors">Skin & Face</Link></li>
+                <li><Link href="/category/pharma-wellness" prefetch={false} className="hover:text-[#18A818] transition-colors">Hair Care</Link></li>
+                <li><Link href="/category/pharma-wellness" prefetch={false} className="hover:text-[#18A818] transition-colors">Feminine Hygiene</Link></li>
+                <li><Link href="/category/pharma-wellness" prefetch={false} className="hover:text-[#18A818] transition-colors">Sexual Wellness</Link></li>
+                <li><Link href="/category/sweet-tooth" prefetch={false} className="hover:text-[#18A818] transition-colors">Ice Creams & More</Link></li>
+                <li><Link href="/category/snacks-munchies" prefetch={false} className="hover:text-[#18A818] transition-colors">Sauces & Spreads</Link></li>
+                <li><Link href="/category/meat-fish" prefetch={false} className="hover:text-[#18A818] transition-colors">Chicken, Meat & Fish</Link></li>
+                <li><Link href="/category/home-lifestyle" prefetch={false} className="hover:text-[#18A818] transition-colors">Electronics & Cords</Link></li>
+                <li><Link href="/category/sweet-tooth" prefetch={false} className="hover:text-[#18A818] transition-colors">Festive & Gift Packs</Link></li>
+                <li><Link href="/wallet" prefetch={false} className="hover:text-[#18A818] transition-colors">E-Gift Cards</Link></li>
               </ul>
             </div>
           </div>

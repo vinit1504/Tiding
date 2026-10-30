@@ -6,6 +6,8 @@ export * from "./product";
 export * from "./seo";
 export * from "./user";
 export * from "./coupon";
+export * from "./cms-banner";
+export * from "./wishlist";
 
 // Common shared API response & pagination types
 export interface ApiResponse<T = unknown> {

@@ -101,7 +101,7 @@ export async function handleProceedToPayment(checkoutId: string, router: any) {
             router.push(`/checkout?orderId=${finalOrderId}`);
           }
         } catch (err: any) {
-          console.error("Payment completion error:", err);
+          console.warn("Payment completion notice:", err?.message || err);
           toast.error("Payment verification failed. Please contact support.");
         }
       },
@@ -125,7 +125,7 @@ export async function handleProceedToPayment(checkoutId: string, router: any) {
     });
     rzp.open();
   } catch (error: any) {
-    console.error("Payment Error:", error);
+    console.warn("Payment notice:", error?.message || error);
     toast.error(error.message || "An unexpected error occurred during payment.");
   }
 }

@@ -1,26 +1,22 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import { useAtom } from "jotai";
 import { useRouter } from "next/navigation";
 import {
   MapPin,
   Navigation,
-  Search,
-  Building,
   Home,
   Briefcase,
   Loader2,
-  X,
-  Compass,
-  CheckCircle2,
   Check,
-  Edit3,
-  Store,
-  AlertTriangle,
   Plus,
   Bookmark,
-  ChevronRight,
+  Radio,
+  Zap,
+  AlertCircle,
+  ArrowRight,
+  CheckCircle2,
 } from "lucide-react";
 import {
   Dialog,
@@ -30,7 +26,6 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   isLocationModalOpenAtom,
   persistentLocationAtom,
@@ -42,11 +37,25 @@ import {
 import { DeliveryLocation, SavedAddress } from "@/types/location";
 import { CustomerAddress } from "@/types/address";
 import { useCustomerAddressesQuery, useCreateAddressMutation } from "@/queries";
-import { AddressModal } from "@/components/account/address-modal";
+import { QUERY_KEYS } from "@/queries/query-keys";
 import { resolveDeliveryStoreApi, ResolvedStoreData } from "@/queries/location/use-geocode-query";
 import { useQueryClient } from "@tanstack/react-query";
-import { AreaItem } from "@/lib/api/location-service";
+import { isUuid } from "@/lib/api/catalog-service";
+import { locationService } from "@/lib/api/location-service";
 import { toast } from "sonner";
+import { AddressModal } from "../account";
+
+type DetectionStep = "idle" | "gps" | "reverse" | "store" | "complete" | "error";
+
+interface DetectionStatus {
+  step: DetectionStep;
+  coords?: { latitude: number; longitude: number };
+  addressTitle?: string;
+  formattedAddress?: string;
+  storeName?: string;
+  etaMinutes?: number;
+  errorMessage?: string;
+}
 
 export function LocationModal() {
   const router = useRouter();
@@ -55,210 +64,51 @@ export function LocationModal() {
   const [currentLocation, setCurrentLocation] = useAtom(persistentLocationAtom);
   const [, setHasUserSetLocation] = useAtom(hasUserSetLocationAtom);
 
-  const [user] = useAtom(userProfileAtom);
+  const [user, setUser] = useAtom(userProfileAtom);
   const [session] = useAtom(authSessionAtom);
   const [, setIsAuthDrawerOpen] = useAtom(isAuthDrawerOpenAtom);
 
-  const [searchQuery, setSearchQuery] = useState("");
   const [isLocating, setIsLocating] = useState(false);
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchResults, setSearchResults] = useState<DeliveryLocation[]>([]);
-  const [availableAreas, setAvailableAreas] = useState<AreaItem[]>([]);
-  const [isLoadingAreas, setIsLoadingAreas] = useState(false);
+  const [detectionStatus, setDetectionStatus] = useState<DetectionStatus>({ step: "idle" });
+  const [detectedLocationData, setDetectedLocationData] = useState<DeliveryLocation | null>(null);
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
+
   const createAddressMutation = useCreateAddressMutation();
 
   // Fetch real saved customer addresses from profile
-  const { data: savedAddresses = [] } = useCustomerAddressesQuery();
+  const { data: serverSavedAddresses = [], isLoading: isLoadingAddresses } = useCustomerAddressesQuery();
   const isAuthenticated = !!user || session.isAuthenticated;
 
-  // Local editable form fields matching society details structure
-  const [houseNo, setHouseNo] = useState(currentLocation.houseNo || "");
-  const [society, setSociety] = useState(currentLocation.society || currentLocation.area || "");
-  const [landmark, setLandmark] = useState(currentLocation.landmark || "");
-  const [isEditingSociety, setIsEditingSociety] = useState(false);
-
-  // Sync local fields when currentLocation changes
-  useEffect(() => {
-    setHouseNo(currentLocation.houseNo || "");
-    setSociety(currentLocation.society || currentLocation.area || "");
-    setLandmark(currentLocation.landmark || "");
-  }, [currentLocation]);
-
-  // Load available delivery areas for 1-tap store resolution without login
-  useEffect(() => {
-    if (!isOpen) return;
-    let isMounted = true;
-    (async () => {
-      try {
-        setIsLoadingAreas(true);
-        const { locationService } = await import("@/services/location-service");
-        const areas = await locationService.getAreasByPincode();
-        if (isMounted && Array.isArray(areas) && areas.length > 0) {
-          setAvailableAreas(areas);
-        }
-      } catch (err) {
-        console.warn("Failed to load delivery areas:", err);
-      } finally {
-        if (isMounted) setIsLoadingAreas(false);
-      }
-    })();
-    return () => {
-      isMounted = false;
-    };
-  }, [isOpen]);
-
-  // Search places / pincodes / societies via backend location API & geocode search with debounce
-  useEffect(() => {
-    if (!searchQuery.trim() || searchQuery.trim().length < 2) {
-      setSearchResults([]);
-      setIsSearching(false);
-      return;
+  // Merge server addresses with local user profile addresses to ensure full offline & online coverage
+  const savedAddresses: CustomerAddress[] = React.useMemo(() => {
+    if (serverSavedAddresses && serverSavedAddresses.length > 0) {
+      return serverSavedAddresses;
     }
-
-    const timer = setTimeout(async () => {
-      setIsSearching(true);
-      try {
-        const cleanQuery = searchQuery.trim();
-        const results: DeliveryLocation[] = [];
-
-        // Check backend location API for pincodes and areas
-        try {
-          const { locationService } = await import("@/services/location-service");
-          if (/^\d+$/.test(cleanQuery)) {
-            // Pincode search
-            const pincodes = await locationService.searchPincodes(cleanQuery);
-            if (pincodes && pincodes.length > 0) {
-              for (const pin of pincodes) {
-                const areas = await locationService.getAreasByPincode(pin.id);
-                if (areas && areas.length > 0) {
-                  for (const a of areas) {
-                    results.push({
-                      area: `${a.name}, ${pin.code}`,
-                      society: a.name,
-                      city: pin.city_name || "Surat",
-                      state: "Gujarat",
-                      pincode: pin.code,
-                      coordinates: {
-                        latitude: Number(a.latitude) || 21.1442,
-                        longitude: Number(a.longitude) || 72.7712,
-                      },
-                      deliveryEtaMinutes: 8,
-                      isServiceable: true,
-                      formattedAddress: `${a.name}, Pincode: ${pin.code}`,
-                      rawAreaId: a.id,
-                    } as any);
-                  }
-                } else {
-                  results.push({
-                    area: `Pincode ${pin.code}`,
-                    city: pin.city_name || "Surat",
-                    state: "Gujarat",
-                    pincode: pin.code,
-                    deliveryEtaMinutes: 8,
-                    isServiceable: true,
-                    formattedAddress: `${pin.city_name || "Surat"} - ${pin.code}`,
-                  });
-                }
-              }
-            }
-          } else {
-            // Text search for areas / societies in backend
-            const areas = await locationService.getAreasByPincode(undefined, cleanQuery);
-            if (areas && areas.length > 0) {
-              for (const a of areas) {
-                results.push({
-                  area: a.name,
-                  society: a.name,
-                  city: "Surat",
-                  state: "Gujarat",
-                  coordinates: {
-                    latitude: Number(a.latitude) || 21.1702,
-                    longitude: Number(a.longitude) || 72.8311,
-                  },
-                  deliveryEtaMinutes: 8,
-                  isServiceable: true,
-                  formattedAddress: `${a.name}, Surat, Gujarat`,
-                  rawAreaId: a.id,
-                } as any);
-              }
-            }
-          }
-        } catch (apiErr) {
-          console.warn("Backend location search error:", apiErr);
-        }
-
-        // OpenStreetMap / Nominatim search fallback
-        if (results.length === 0) {
-          try {
-            const geocodeUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
-              `${cleanQuery}, Surat, Gujarat, India`
-            )}&format=json&addressdetails=1&limit=5`;
-
-            const res = await fetch(geocodeUrl, {
-              headers: { Accept: "application/json" },
-            });
-
-            if (res.ok) {
-              const data = await res.json();
-              if (Array.isArray(data) && data.length > 0) {
-                for (const item of data) {
-                  const addr = item.address || {};
-                  const soc =
-                    addr.residential ||
-                    addr.neighbourhood ||
-                    addr.suburb ||
-                    addr.road ||
-                    cleanQuery;
-                  const lat = parseFloat(item.lat);
-                  const lon = parseFloat(item.lon);
-
-                  results.push({
-                    area: soc,
-                    society: soc,
-                    city: addr.city || addr.town || "Surat",
-                    state: addr.state || "Gujarat",
-                    pincode: addr.postcode || "395009",
-                    coordinates: {
-                      latitude: lat,
-                      longitude: lon,
-                    },
-                    deliveryEtaMinutes: 8,
-                    isServiceable: true,
-                    formattedAddress: item.display_name,
-                  });
-                }
-              }
-            }
-          } catch (osmErr) {
-            console.warn("Geocode fallback error:", osmErr);
-          }
-        }
-
-        setSearchResults(results);
-      } catch (err) {
-        console.error("Search query failed:", err);
-      } finally {
-        setIsSearching(false);
-      }
-    }, 350);
-
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
-
-  // Construct display string from components
-  const computeBlinkitArea = (hNo: string, soc: string, lmk: string) => {
-    const parts: string[] = [];
-    if (hNo.trim()) parts.push(hNo.trim());
-    if (soc.trim()) parts.push(soc.trim());
-    if (lmk.trim()) {
-      const cleanLmk = lmk.trim().startsWith("nr.") ? lmk.trim() : `nr. ${lmk.trim()}`;
-      parts.push(cleanLmk);
+    if (user?.savedAddresses && user.savedAddresses.length > 0) {
+      return user.savedAddresses.map((addr) => ({
+        id: addr.id,
+        address_type: (addr.type?.toUpperCase() === "WORK" ? "WORK" : "HOME") as any,
+        recipient_name: addr.receiverName || user?.name || "Customer",
+        recipient_phone: addr.receiverPhone || user?.phone || "",
+        address_line_1: addr.addressLine || "",
+        address_line_2: addr.area || null,
+        landmark: addr.landmark || null,
+        area_name: addr.area,
+        city_name: addr.city,
+        pincode: addr.pincode,
+        latitude: addr.coordinates?.latitude ? String(addr.coordinates.latitude) : null,
+        longitude: addr.coordinates?.longitude ? String(addr.coordinates.longitude) : null,
+        is_default: !!addr.isDefault,
+        area_id: "feacf6d2-53e1-40de-af4e-ddc1404c0fb7",
+        city_id: "e4f80d05-6ce3-40c3-9d12-3ad6dc29bac9",
+        state_id: "05efa890-b84c-44ed-b312-9ba531814aeb",
+        country_id: "bb1942fd-ab4f-48a9-999f-6cebcd644e68",
+      }));
     }
-    return parts.length > 0 ? parts.join(", ") : soc.trim() || "Current Location";
-  };
+    return [];
+  }, [serverSavedAddresses, user]);
 
-  // Handle Real GPS location detection & Reverse Geocoding
+  // Handle GPS location detection & store resolution with proper multi-step progress flow
   const handleDetectLocation = useCallback(() => {
     if (typeof window === "undefined" || !navigator.geolocation) {
       toast.error("Geolocation is not supported by your browser");
@@ -266,6 +116,7 @@ export function LocationModal() {
     }
 
     setIsLocating(true);
+    setDetectionStatus({ step: "gps" });
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
@@ -273,8 +124,13 @@ export function LocationModal() {
         let detected: DeliveryLocation | null = null;
         let resolvedStore: ResolvedStoreData | null = null;
 
+        // Step 1 Complete: Coordinates locked
+        setDetectionStatus({
+          step: "reverse",
+          coords: { latitude, longitude },
+        });
+
         try {
-          // Concurrently call backend store resolve and reverse-geocode
           const [storeResult, geocodeRes] = await Promise.allSettled([
             resolveDeliveryStoreApi({ latitude, longitude }),
             fetch(`/api/geocode?action=reverse&lat=${latitude}&lng=${longitude}`).then((r) =>
@@ -293,7 +149,7 @@ export function LocationModal() {
           console.warn("Location or store resolve error:", apiErr);
         }
 
-        // Direct Nominatim fallback if internal proxy had an issue
+        // Direct Nominatim fallback if reverse geocode had an issue
         if (!detected) {
           try {
             const nomRes = await fetch(
@@ -309,7 +165,7 @@ export function LocationModal() {
                 addr.suburb ||
                 addr.road ||
                 addr.city_district ||
-                "Vesu";
+                "Current Location";
 
               detected = {
                 area: soc,
@@ -328,159 +184,117 @@ export function LocationModal() {
           }
         }
 
-        // Apply detected or fallback
-        if (detected) {
-          const finalLocation: DeliveryLocation = {
-            ...detected,
-            coordinates: { latitude, longitude },
-            darkStoreId: resolvedStore?.storeId || detected.darkStoreId,
-            darkStoreName: resolvedStore?.storeName || detected.darkStoreName || "Tiding Express Store",
-            storeAddress: resolvedStore?.storeAddress || detected.storeAddress,
-            deliveryEtaMinutes: resolvedStore?.deliveryEtaMinutes || 8,
-            isServiceable: resolvedStore ? resolvedStore.isServiceable : true,
-            storeDistanceKm: resolvedStore?.distanceKm,
-          };
-
-          setCurrentLocation(finalLocation);
-          setHouseNo(finalLocation.houseNo || "");
-          setSociety(finalLocation.society || finalLocation.area || "");
-          setLandmark(finalLocation.landmark || "");
-          setHasUserSetLocation(true);
-          setIsLocating(false);
-          setIsOpen(false);
-          queryClient.invalidateQueries({ queryKey: ["catalog"] });
-          router.refresh();
-
-          toast.success(
-            `Delivering to ${finalLocation.society || finalLocation.area} in ${finalLocation.deliveryEtaMinutes || 8} mins!`
-          );
-        } else {
-          // Fallback to default serviceable location
-          const fallback: DeliveryLocation = {
-            area: "Vesu",
-            society: "Vesu Main Road",
-            city: "Surat",
-            state: "Gujarat",
-            pincode: "395007",
-            formattedAddress: "Vesu, Surat, Gujarat 395007",
-            coordinates: { latitude, longitude },
-            deliveryEtaMinutes: 8,
-            isServiceable: true,
-            darkStoreName: "Vesu Express Hub",
-          };
-          setCurrentLocation(fallback);
-          setHouseNo("");
-          setSociety("Vesu Main Road");
-          setLandmark("");
-          setHasUserSetLocation(true);
-          setIsLocating(false);
-          setIsOpen(false);
-          queryClient.invalidateQueries({ queryKey: ["catalog"] });
-          router.refresh();
-          toast.success("Location set to Vesu, Surat (8-minute delivery zone)!");
+        // Ensure city is resolved (from formattedAddress or coordinates if empty)
+        let resolvedCity = detected?.city || "";
+        if (!resolvedCity && detected?.formattedAddress) {
+          if (/ahmedabad/i.test(detected.formattedAddress)) {
+            resolvedCity = "Ahmedabad";
+          } else if (/surat/i.test(detected.formattedAddress)) {
+            resolvedCity = "Surat";
+          }
         }
+        if (!resolvedCity) {
+          resolvedCity = latitude > 22.2 ? "Ahmedabad" : "Surat";
+        }
+
+        // Ensure 6-digit pincode is resolved if present in formattedAddress
+        let resolvedPincode = detected?.pincode || "";
+        if (!resolvedPincode && detected?.formattedAddress) {
+          const pinMatch = detected.formattedAddress.match(/\b([1-9][0-9]{5})\b/);
+          if (pinMatch) resolvedPincode = pinMatch[1];
+        }
+        if (!resolvedPincode) {
+          resolvedPincode = resolvedCity === "Ahmedabad" ? "380058" : "395007";
+        }
+
+        if (detected) {
+          detected.city = resolvedCity;
+          detected.pincode = resolvedPincode;
+        }
+
+        const areaName = detected?.society || detected?.area || "South Bopal";
+        const cityName = resolvedCity;
+
+        // Step 2 Complete: Reverse geocode resolved, now resolving store
+        setDetectionStatus({
+          step: "store",
+          coords: { latitude, longitude },
+          addressTitle: `${areaName}, ${cityName}`,
+          formattedAddress: detected?.formattedAddress,
+        });
+
+        const storeName = resolvedStore?.storeName || detected?.darkStoreName || "Tiding Butcher's Choice & Coastal Fresh - Bopal";
+        const etaMinutes = resolvedStore?.deliveryEtaMinutes || detected?.deliveryEtaMinutes || 12;
+
+        const finalLocation: DeliveryLocation = detected
+          ? {
+              ...detected,
+              city: resolvedCity,
+              pincode: resolvedPincode,
+              coordinates: { latitude, longitude },
+              darkStoreId: resolvedStore?.storeId || detected.darkStoreId,
+              darkStoreName: storeName,
+              storeAddress: resolvedStore?.storeAddress || detected.storeAddress,
+              deliveryEtaMinutes: etaMinutes,
+              isServiceable: resolvedStore ? resolvedStore.isServiceable : true,
+              storeDistanceKm: resolvedStore?.distanceKm,
+            }
+          : {
+              area: areaName,
+              society: areaName,
+              city: resolvedCity,
+              state: "Gujarat",
+              pincode: resolvedPincode,
+              formattedAddress: `Current Location, ${areaName}, ${resolvedCity}, Gujarat`,
+              coordinates: { latitude, longitude },
+              deliveryEtaMinutes: 12,
+              isServiceable: true,
+              darkStoreName: storeName,
+            };
+
+        // Step 3 Complete: Dark store resolved and location ready
+        setDetectionStatus({
+          step: "complete",
+          coords: { latitude, longitude },
+          addressTitle: `${finalLocation.society || finalLocation.area}, ${finalLocation.city}`,
+          storeName: finalLocation.darkStoreName,
+          etaMinutes: finalLocation.deliveryEtaMinutes,
+        });
+
+        // 1. Store the detected location in the global persistent store
+        setCurrentLocation(finalLocation);
+        setHasUserSetLocation(true);
+        setDetectedLocationData(finalLocation);
+        queryClient.invalidateQueries({ queryKey: ["catalog"] });
+
+        // 2. Delightful brief pause to let the user see the complete verified flow, then automatically open Address Popup!
+        setTimeout(() => {
+          setIsLocating(false);
+          setDetectionStatus({ step: "idle" });
+          setIsOpen(false);
+          setIsAddressModalOpen(true);
+          toast.success("Location verified! Please enter your doorstep details to save.");
+        }, 750);
       },
       (error) => {
         setIsLocating(false);
+        let errorMsg = "Unable to retrieve GPS location. Please try again or select a saved address.";
         if (error.code === error.PERMISSION_DENIED) {
-          toast.error("Location permission denied. Please allow location access or pick an area below.");
+          errorMsg = "Location permission denied. Please allow location access in your browser.";
         } else if (error.code === error.TIMEOUT) {
-          toast.error("Location request timed out. Please try again.");
-        } else {
-          toast.error("Unable to retrieve GPS location. Please choose a locality below.");
+          errorMsg = "Location request timed out. Please try again.";
         }
+        setDetectionStatus({
+          step: "error",
+          errorMessage: errorMsg,
+        });
+        toast.error(errorMsg);
       },
       { timeout: 12000, enableHighAccuracy: true, maximumAge: 0 }
     );
-  }, [setCurrentLocation, setHasUserSetLocation, setIsOpen, queryClient, router]);
+  }, [setCurrentLocation, setHasUserSetLocation, setIsOpen, queryClient]);
 
-  // Core handler: Select an area (with or without login) -> sends area_id -> resolves dark store -> sets location -> invalidates catalog queries
-  const handleSelectArea = async (area: AreaItem | DeliveryLocation) => {
-    const areaId =
-      (area as any).rawAreaId ||
-      (area as any).areaId ||
-      (area as any).area_id ||
-      area.id;
-
-    const areaName = (area as any).name || (area as any).area || "Selected Area";
-
-    let updatedItem: DeliveryLocation = {
-      areaId,
-      area: areaName,
-      society: areaName,
-      city: (area as any).city || "Surat",
-      state: "Gujarat",
-      pincode: (area as any).pincode || "395006",
-      formattedAddress: (area as any).formattedAddress || `${areaName}, Surat, Gujarat`,
-      coordinates: (area as any).coordinates || {
-        latitude: Number((area as any).latitude) || 21.2266,
-        longitude: Number((area as any).longitude) || 72.8753,
-      },
-      deliveryEtaMinutes: 8,
-      isServiceable: true,
-      darkStoreName: "Express Store",
-    };
-
-    if (areaId) {
-      try {
-        const resolvedStore = await resolveDeliveryStoreApi({ area_id: areaId });
-        if (resolvedStore) {
-          updatedItem = {
-            ...updatedItem,
-            areaId,
-            darkStoreId: resolvedStore.storeId || updatedItem.darkStoreId,
-            darkStoreName: resolvedStore.storeName || updatedItem.darkStoreName,
-            storeAddress: resolvedStore.storeAddress || updatedItem.storeAddress,
-            deliveryEtaMinutes: resolvedStore.deliveryEtaMinutes || updatedItem.deliveryEtaMinutes,
-            isServiceable: resolvedStore.isServiceable,
-            storeDistanceKm: resolvedStore.distanceKm,
-          };
-        }
-      } catch (err) {
-        console.warn("Failed to resolve store by area_id:", err);
-      }
-    } else if ((area as any).coordinates?.latitude && (area as any).coordinates?.longitude) {
-      const resolvedStore = await resolveDeliveryStoreApi((area as any).coordinates);
-      if (resolvedStore) {
-        updatedItem = {
-          ...updatedItem,
-          darkStoreId: resolvedStore.storeId || updatedItem.darkStoreId,
-          darkStoreName: resolvedStore.storeName || updatedItem.darkStoreName,
-          storeAddress: resolvedStore.storeAddress || updatedItem.storeAddress,
-          deliveryEtaMinutes: resolvedStore.deliveryEtaMinutes || updatedItem.deliveryEtaMinutes,
-          isServiceable: resolvedStore.isServiceable,
-          storeDistanceKm: resolvedStore.distanceKm,
-        };
-      }
-    }
-
-    setCurrentLocation(updatedItem);
-    setHouseNo(updatedItem.houseNo || "");
-    setSociety(updatedItem.society || updatedItem.area || "");
-    setLandmark(updatedItem.landmark || "");
-    setHasUserSetLocation(true);
-    setSearchQuery("");
-    setSearchResults([]);
-    setIsOpen(false);
-
-    // Invalidate product queries across the application so the catalog refetches for this dark store
-    queryClient.invalidateQueries({ queryKey: ["catalog"] });
-    router.refresh();
-
-    if (updatedItem.isServiceable === false) {
-      toast.warning("Notice: This address is currently outside our express delivery zone.");
-    } else {
-      toast.success(
-        `Delivering from ${updatedItem.darkStoreName || "Express Hub"} in ${updatedItem.deliveryEtaMinutes || 8} mins!`
-      );
-    }
-  };
-
-  const handleSelectSearchResult = async (item: DeliveryLocation) => {
-    await handleSelectArea(item);
-  };
-
-  // Select a saved address from customer account
+  // Select an existing saved address from customer account
   const handleSelectSavedAddress = async (addr: CustomerAddress) => {
     const parts = [
       addr.address_line_1,
@@ -502,13 +316,13 @@ export function LocationModal() {
       houseNo: addr.address_line_1,
       society: societyName,
       landmark: addr.landmark || "",
-      city: addr.city_name || "Ahmedabad",
+      city: addr.city_name || "Surat",
       state: addr.state_name || "Gujarat",
-      pincode: addr.pincode || "380054",
+      pincode: addr.pincode || "395007",
       formattedAddress,
       coordinates: {
-        latitude: Number(addr.latitude) || 23.0375,
-        longitude: Number(addr.longitude) || 72.5122,
+        latitude: Number(addr.latitude) || 21.1702,
+        longitude: Number(addr.longitude) || 72.8311,
       },
       deliveryEtaMinutes: 8,
       isServiceable: true,
@@ -557,9 +371,6 @@ export function LocationModal() {
     }
 
     setCurrentLocation(updatedLocation);
-    setHouseNo(updatedLocation.houseNo || "");
-    setSociety(updatedLocation.society || updatedLocation.area || "");
-    setLandmark(updatedLocation.landmark || "");
     setHasUserSetLocation(true);
     setIsOpen(false);
     queryClient.invalidateQueries({ queryKey: ["catalog"] });
@@ -570,81 +381,158 @@ export function LocationModal() {
   };
 
   const handleAddNewAddress = () => {
-    if (!isAuthenticated) {
-      setIsOpen(false);
-      setIsAuthDrawerOpen(true);
-      toast.info("Please login to save delivery addresses");
-    } else {
-      setIsAddressModalOpen(true);
-    }
+    setIsOpen(false);
+    setDetectedLocationData(currentLocation);
+    setIsAddressModalOpen(true);
   };
 
-  const handleSaveNewAddress = async (data: Partial<SavedAddress> & { floor?: string }) => {
+  // Save the address in current user address and update global location
+  const handleSaveNewAddress = async (
+    data: Partial<SavedAddress> & { floor?: string; houseNo?: string }
+  ) => {
     try {
-      const created = await createAddressMutation.mutateAsync({
-        address_type: (data.type?.toUpperCase() === "WORK" ? "WORK" : "HOME") as any,
-        recipient_name: data.receiverName || user?.name || "Customer",
-        recipient_phone: data.receiverPhone || user?.phone || "9876543210",
-        address_line_1: data.addressLine?.split(",")[0]?.trim() || "House",
-        address_line_2: data.area || null,
-        landmark: data.landmark || null,
-        area_id: "feacf6d2-53e1-40de-af4e-ddc1404c0fb7",
-        city_id: "e4f80d05-6ce3-40c3-9d12-3ad6dc29bac9",
-        state_id: "05efa890-b84c-44ed-b312-9ba531814aeb",
-        country_id: "bb1942fd-ab4f-48a9-999f-6cebcd644e68",
-        is_default: savedAddresses.length === 0,
-      });
+      const houseNumber = data.houseNo || data.addressLine?.split(",")[0]?.trim() || "House";
+      const fullAddressLine = [
+        houseNumber,
+        data.floor?.trim() ? `${data.floor.trim()} Floor` : "",
+        data.landmark?.trim(),
+      ]
+        .filter(Boolean)
+        .join(", ");
 
-      setIsAddressModalOpen(false);
-      toast.success("New address added successfully!");
-      if (created) {
-        handleSelectSavedAddress(created);
+      const selectedCoords = detectedLocationData?.coordinates || currentLocation.coordinates || {
+        latitude: 21.1702,
+        longitude: 72.8311,
+      };
+
+      let createdServerAddress: CustomerAddress | null = null;
+
+      // 1. If authenticated, persist to backend DB
+      if (isAuthenticated) {
+        try {
+          const resolved = await locationService.resolveHierarchyUuids({
+            areaId: data.areaId || detectedLocationData?.areaId || currentLocation.areaId,
+            cityId: data.cityId || (currentLocation as any)?.cityId,
+            stateId: data.stateId || (currentLocation as any)?.stateId,
+            countryId: data.countryId || (currentLocation as any)?.countryId,
+            pincodeId: data.pincodeId,
+            areaName: data.area || detectedLocationData?.area || currentLocation.area,
+            cityName: data.city || detectedLocationData?.city || currentLocation.city,
+            stateName: detectedLocationData?.state || currentLocation.state,
+          });
+
+          if (
+            isUuid(resolved.areaId) &&
+            isUuid(resolved.cityId) &&
+            isUuid(resolved.stateId) &&
+            isUuid(resolved.countryId)
+          ) {
+            createdServerAddress = await createAddressMutation.mutateAsync({
+              address_type: (data.type?.toUpperCase() === "WORK"
+                ? "WORK"
+                : data.type?.toUpperCase() === "OTHER"
+                ? "OTHER"
+                : "HOME") as any,
+              recipient_name: data.receiverName || user?.name || "Customer",
+              recipient_phone: data.receiverPhone || user?.phone || "9876543210",
+              address_line_1: houseNumber,
+              address_line_2: data.area || detectedLocationData?.area || null,
+              landmark: data.landmark || null,
+              area_id: resolved.areaId!,
+              city_id: resolved.cityId!,
+              state_id: resolved.stateId!,
+              country_id: resolved.countryId!,
+              pincode_id: isUuid(resolved.pincodeId) ? resolved.pincodeId : null,
+              latitude: String(selectedCoords.latitude),
+              longitude: String(selectedCoords.longitude),
+              is_default: savedAddresses.length === 0,
+            });
+          } else {
+            console.warn("Could not resolve valid UUIDs for backend address creation; saving locally:", resolved);
+          }
+        } catch (apiErr: any) {
+          console.warn("Backend address creation error (fallback to local state):", apiErr);
+          const errorMsg = apiErr?.message || "Could not sync address to server. Saved locally.";
+          toast.error(errorMsg);
+        }
       }
-    } catch (err) {
-      console.warn("Backend address creation error, applying local fallback:", err);
-      const parts = [data.addressLine, data.area, data.city, data.pincode].filter(Boolean);
-      const newLoc: DeliveryLocation = {
-        area: data.area || data.addressLine || "New Address",
-        houseNo: data.addressLine?.split(",")[0]?.trim() || "",
-        society: data.area || "",
+
+      // 2. Build SavedAddress record
+      const newAddressId = createdServerAddress?.id || `addr-${Date.now()}`;
+      const savedItem: SavedAddress = {
+        id: newAddressId,
+        type: (data.type?.toLowerCase() === "work" ? "work" : "home") as any,
+        title: data.title || (data.type?.toUpperCase() === "WORK" ? "Work" : "Home"),
+        addressLine: fullAddressLine || data.addressLine || houseNumber,
         landmark: data.landmark || "",
-        city: data.city || "Ahmedabad",
-        state: "Gujarat",
-        pincode: data.pincode || "380054",
-        formattedAddress: parts.join(", "),
-        deliveryEtaMinutes: 8,
+        area: data.area || detectedLocationData?.area || "",
+        city: data.city || detectedLocationData?.city || "",
+        pincode: data.pincode || detectedLocationData?.pincode || "",
+        areaId: data.areaId || detectedLocationData?.areaId,
+        cityId: data.cityId,
+        stateId: data.stateId,
+        countryId: data.countryId,
+        pincodeId: data.pincodeId,
+        coordinates: selectedCoords,
+        isDefault: savedAddresses.length === 0,
+        receiverName: data.receiverName || user?.name || "Customer",
+        receiverPhone: data.receiverPhone || user?.phone || "9876543210",
+      };
+
+      // 3. Update user profile state & localStorage
+      if (user) {
+        const existing = user.savedAddresses || [];
+        const updatedUser = {
+          ...user,
+          savedAddresses: [savedItem, ...existing.filter((a) => a.id !== newAddressId)],
+        };
+        setUser(updatedUser);
+        try {
+          localStorage.setItem("tiding_user", JSON.stringify(updatedUser));
+        } catch {}
+      }
+
+      // 4. Update the active DeliveryLocation so the app immediately delivers to this address
+      const finalLoc: DeliveryLocation = {
+        id: newAddressId,
+        areaId: detectedLocationData?.areaId || currentLocation.areaId,
+        houseNo: houseNumber,
+        society: data.area || detectedLocationData?.society || detectedLocationData?.area || "",
+        area: data.area || detectedLocationData?.area || "",
+        landmark: data.landmark || "",
+        city: data.city || detectedLocationData?.city || "Surat",
+        state: detectedLocationData?.state || "Gujarat",
+        pincode: data.pincode || detectedLocationData?.pincode || "395007",
+        formattedAddress: [fullAddressLine, data.area, data.city, data.pincode].filter(Boolean).join(", "),
+        coordinates: selectedCoords,
+        darkStoreId: detectedLocationData?.darkStoreId || currentLocation.darkStoreId,
+        darkStoreName: detectedLocationData?.darkStoreName || currentLocation.darkStoreName || "Tiding Express Store",
+        storeAddress: detectedLocationData?.storeAddress || currentLocation.storeAddress,
+        deliveryEtaMinutes: detectedLocationData?.deliveryEtaMinutes || currentLocation.deliveryEtaMinutes || 8,
         isServiceable: true,
       };
-      (newLoc as any).addressType = data.type?.toUpperCase();
-      setCurrentLocation(newLoc);
-      setHouseNo(newLoc.houseNo || "");
-      setSociety(newLoc.society || newLoc.area || "");
-      setLandmark(newLoc.landmark || "");
+      (finalLoc as any).addressType = data.type?.toUpperCase() || "HOME";
+      (finalLoc as any).savedAddressId = newAddressId;
+
+      setCurrentLocation(finalLoc);
       setHasUserSetLocation(true);
       setIsAddressModalOpen(false);
       setIsOpen(false);
-      toast.success(`Delivering to ${newLoc.area}!`);
+      setDetectedLocationData(null);
+
+      // Invalidate queries so that Header, Saved Addresses, Account, etc. reflect the changes immediately
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.USER.ADDRESSES() });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.USER.PROFILE() });
+      queryClient.invalidateQueries({ queryKey: ["catalog"] });
+      router.refresh();
+
+      toast.success(
+        `Address saved! Delivering to ${finalLoc.houseNo || finalLoc.area} in ${finalLoc.deliveryEtaMinutes} mins`
+      );
+    } catch (err: any) {
+      console.warn("Save address notice:", err?.message || err);
+      toast.error("Failed to save delivery address.");
     }
-  };
-
-
-  const handleSaveAndConfirm = () => {
-    const computedArea = computeBlinkitArea(houseNo, society, landmark);
-    const updatedLocation: DeliveryLocation = {
-      ...currentLocation,
-      area: computedArea,
-      society: society.trim(),
-      houseNo: houseNo.trim(),
-      landmark: landmark.trim(),
-      deliveryEtaMinutes: currentLocation.deliveryEtaMinutes || 8,
-    };
-
-    setCurrentLocation(updatedLocation);
-    setHasUserSetLocation(true);
-    setIsOpen(false);
-    queryClient.invalidateQueries({ queryKey: ["catalog"] });
-    router.refresh();
-    toast.success(`Delivering to ${computedArea}!`);
   };
 
   const handleLoginClick = () => {
@@ -655,460 +543,359 @@ export function LocationModal() {
   return (
     <>
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent className="max-w-md sm:max-w-lg p-0 overflow-hidden border-[var(--border)] bg-[var(--surface)] shadow-2xl rounded-2xl sm:rounded-3xl">
-        {/* Header Section */}
-        <div className="p-4 sm:p-5 border-b border-[var(--border)] space-y-3 bg-[var(--surface)]">
-          <DialogHeader className="space-y-1">
-            <div className="flex items-center gap-2 text-[#0c831f]">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-[#0c831f]">
-                <MapPin className="h-4 w-4" />
+        <DialogContent className="max-w-md p-0 overflow-hidden border-[var(--border)] bg-[var(--surface)] shadow-2xl rounded-2xl sm:rounded-3xl">
+          {/* Header */}
+          <div className="p-4 sm:p-5 border-b border-[var(--border)] space-y-1 bg-[var(--surface)]">
+            <DialogHeader className="space-y-1">
+              <div className="flex items-center gap-2 text-[#0c831f]">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-[#0c831f]">
+                  <MapPin className="h-4 w-4" />
+                </div>
+                <DialogTitle className="text-base font-bold text-[var(--text-primary)]">
+                  Delivery Location
+                </DialogTitle>
               </div>
-              <DialogTitle className="text-base font-bold text-[var(--text-primary)]">
-                Select Your Delivery Location
-              </DialogTitle>
-            </div>
-            <DialogDescription className="text-xs text-[var(--text-secondary)]">
-              Choose your doorstep address for express grocery delivery
-            </DialogDescription>
-          </DialogHeader>
-
-          {/* GPS Auto-Detect Button */}
-          <Button
-            onClick={handleDetectLocation}
-            disabled={isLocating}
-            className="w-full h-10 bg-[#0c831f] hover:bg-[#0a6f1a] text-white flex items-center justify-center gap-2 font-bold text-xs shadow-xs transition-all active:scale-[0.99] cursor-pointer rounded-xl"
-          >
-            {isLocating ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Detecting precise location via GPS...</span>
-              </>
-            ) : (
-              <>
-                <Navigation className="h-4 w-4 fill-white/20" />
-                <span>Use Current Location (GPS)</span>
-              </>
-            )}
-          </Button>
-
-          {/* Search Input */}
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--text-muted)]" />
-            <Input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search society, building, area or pincode..."
-              className="pl-9 pr-8 h-9 text-xs bg-[var(--surface-secondary)]/60 border-[var(--border)] focus:bg-[var(--surface)] rounded-xl"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchQuery("");
-                  setSearchResults([]);
-                }}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
+              <DialogDescription className="text-xs text-[var(--text-secondary)]">
+                Detect your live location or pick from saved addresses
+              </DialogDescription>
+            </DialogHeader>
           </div>
-        </div>
 
-        {/* Scrollable Body Containing All Proper Display Sections */}
-        <div className="max-h-[58vh] overflow-y-auto px-4 sm:px-5 py-3 space-y-4">
-          {searchQuery.trim().length > 0 ? (
-            /* Search Results View */
-            <div className="space-y-1.5">
-              <p className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider px-1">
-                Matching Societies & Locations
-              </p>
-
-              {isSearching ? (
-                <div className="p-8 text-center text-xs text-[var(--text-muted)] flex items-center justify-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-[#0c831f]" />
-                  <span>Searching societies & areas...</span>
-                </div>
-              ) : searchResults.length > 0 ? (
-                searchResults.map((item, idx) => (
-                  <button
-                    key={`${item.formattedAddress}-${idx}`}
-                    onClick={() => handleSelectSearchResult(item)}
-                    className="w-full flex items-start gap-2.5 p-2.5 rounded-xl text-left transition-colors cursor-pointer border border-transparent hover:border-[#0c831f]/30 hover:bg-[#0c831f]/5 group"
-                  >
-                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--surface-secondary)] text-[var(--text-muted)] shrink-0 group-hover:text-[#0c831f] group-hover:bg-[#0c831f]/10 transition-colors mt-0.5">
-                      <Building className="h-3.5 w-3.5" />
+          {/* Modal Body */}
+          <div className="p-4 sm:p-5 space-y-4 max-h-[65vh] overflow-y-auto">
+            {/* Live GPS Detection Flow Progression View */}
+            {isLocating ? (
+              <div className="py-2 px-1 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                {/* Animated Radar Pulse Card */}
+                <div className="relative flex flex-col items-center justify-center p-6 rounded-2xl bg-gradient-to-b from-emerald-500/15 via-emerald-500/5 to-transparent border border-emerald-500/25 overflow-hidden text-center">
+                  <div className="relative flex items-center justify-center mb-3">
+                    <div className="absolute h-20 w-20 rounded-full bg-emerald-500/15 animate-ping" />
+                    <div className="absolute h-14 w-14 rounded-full bg-emerald-500/25 animate-pulse" />
+                    <div className="relative flex h-11 w-11 items-center justify-center rounded-full bg-[#0c831f] text-white shadow-lg shadow-emerald-600/30">
+                      <Navigation className="h-5 w-5 animate-pulse" />
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold text-[var(--text-primary)] group-hover:text-[#0c831f] truncate">
-                        {item.area}
-                      </p>
-                      <p className="text-[11px] text-[var(--text-secondary)] line-clamp-2 mt-0.5 leading-snug">
-                        {item.formattedAddress}
-                      </p>
-                    </div>
-                  </button>
-                ))
-              ) : (
-                <div className="p-6 text-center text-xs text-[var(--text-muted)]">
-                  No matching societies found. Try entering area or pincode.
-                </div>
-              )}
-            </div>
-          ) : (
-            <>
-              {/* SECTION 1: Active / Current Delivery Location Section */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between px-0.5">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-primary)]">
-                    <span className="flex h-2 w-2 rounded-full bg-[#0c831f] animate-pulse" />
-                    <span>Current Delivery Location</span>
                   </div>
-                  {currentLocation.isServiceable !== false ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-[#0c831f] bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-                      ⚡ {currentLocation.deliveryEtaMinutes || 8} Mins
-                    </span>
-                  ) : (
-                    <span className="text-[10px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-full">
-                      Unavailable
-                    </span>
+
+                  <h3 className="text-sm font-bold text-[var(--text-primary)]">
+                    {detectionStatus.step === "gps" && "Requesting GPS Satellite Lock..."}
+                    {detectionStatus.step === "reverse" && "Identifying Society & Street Name..."}
+                    {detectionStatus.step === "store" && "Connecting to Nearest Express Hub..."}
+                    {detectionStatus.step === "complete" && "Location Verified Successfully!"}
+                  </h3>
+                  <p className="text-xs text-[var(--text-secondary)] mt-1">
+                    {detectionStatus.step === "gps" && "Accessing high-accuracy device coordinates"}
+                    {detectionStatus.step === "reverse" && "Resolving postal locality and doorstep landmark"}
+                    {detectionStatus.step === "store" && "Checking instant dark store inventory & speed ETA"}
+                    {detectionStatus.step === "complete" && "Opening doorstep delivery address form..."}
+                  </p>
+
+                  {/* Live Coordinates Badge */}
+                  {detectionStatus.coords && (
+                    <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white dark:bg-neutral-800 text-[11px] font-mono font-medium text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 shadow-xs">
+                      <Radio className="h-3 w-3 animate-pulse text-[#0c831f]" />
+                      <span>
+                        {detectionStatus.coords.latitude.toFixed(4)}° N, {detectionStatus.coords.longitude.toFixed(4)}° E
+                      </span>
+                    </div>
                   )}
                 </div>
 
-                <div
-                  className={`rounded-2xl border p-3.5 space-y-2.5 transition-all ${
-                    currentLocation.isServiceable !== false
-                      ? "border-emerald-500/30 bg-emerald-50/15 dark:bg-emerald-950/10 shadow-xs"
-                      : "border-amber-300 bg-amber-50/40 dark:bg-amber-950/20"
-                  }`}
-                >
-                  <div className="flex items-start gap-2.5">
+                {/* Step Progression Checklist */}
+                <div className="space-y-2.5 p-3.5 rounded-xl bg-gray-50/90 dark:bg-neutral-850/60 border border-[var(--border)]">
+                  {/* Step 1: GPS Lock */}
+                  <div className="flex items-center gap-2.5 text-xs">
                     <div
-                      className={`flex h-8 w-8 items-center justify-center rounded-xl shrink-0 mt-0.5 ${
-                        currentLocation.isServiceable !== false
-                          ? "bg-emerald-100 text-[#0c831f]"
-                          : "bg-amber-100 text-amber-600"
+                      className={`flex h-6 w-6 items-center justify-center rounded-full shrink-0 transition-all ${
+                        detectionStatus.coords
+                          ? "bg-[#0c831f] text-white"
+                          : "bg-emerald-100 dark:bg-emerald-950/60 text-[#0c831f]"
                       }`}
                     >
-                      <Home className="h-4 w-4" />
+                      {detectionStatus.coords ? (
+                        <Check className="h-3.5 w-3.5 stroke-[3]" />
+                      ) : (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      )}
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-1">
-                        <h4 className="text-xs sm:text-sm font-black text-[var(--text-primary)] truncate">
-                          {computeBlinkitArea(houseNo, society, landmark)}
-                        </h4>
-                        <span className="text-[10px] font-extrabold text-[#0c831f] shrink-0 uppercase tracking-wider">
-                          Active
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-[var(--text-secondary)] mt-0.5 line-clamp-2 leading-relaxed">
-                        {currentLocation.formattedAddress}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-[var(--text-primary)]">GPS Device Coordinates</p>
+                      <p className="text-[10px] text-[var(--text-muted)] truncate">
+                        {detectionStatus.coords
+                          ? "Satellite signal locked"
+                          : "Requesting browser permission..."}
                       </p>
-
-                      {/* Store Fulfilled Information */}
-                      {currentLocation.darkStoreName && (
-                        <div className="flex flex-wrap items-center gap-1.5 mt-2 pt-2 border-t border-[var(--border)]/60 text-[11px]">
-                          <span className="inline-flex items-center gap-1 font-semibold text-[#0c831f] bg-emerald-50 dark:bg-emerald-950/30 px-2 py-0.5 rounded-md">
-                            <Store className="h-3 w-3" />
-                            <span>Fulfilled by {currentLocation.darkStoreName}</span>
-                          </span>
-                          {currentLocation.storeDistanceKm !== undefined && (
-                            <span className="text-[10px] text-[var(--text-muted)] font-medium">
-                              ({currentLocation.storeDistanceKm.toFixed(1)} km away)
-                            </span>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Unserviceable Warning */}
-                      {currentLocation.isServiceable === false && (
-                        <div className="flex items-center gap-2 p-2 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-800 dark:text-amber-300 text-xs mt-2">
-                          <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" />
-                          <span>Our dark stores do not service this location yet. Please select an alternate area.</span>
-                        </div>
-                      )}
                     </div>
                   </div>
 
-                  {/* Inline Flat / Society Refinement Toggle */}
-                  <div className="pt-1">
+                  {/* Step 2: Locality Reverse Geocode */}
+                  <div className="flex items-center gap-2.5 text-xs">
+                    <div
+                      className={`flex h-6 w-6 items-center justify-center rounded-full shrink-0 transition-all ${
+                        detectionStatus.addressTitle
+                          ? "bg-[#0c831f] text-white"
+                          : detectionStatus.step === "reverse"
+                          ? "bg-emerald-100 dark:bg-emerald-950/60 text-[#0c831f]"
+                          : "bg-gray-200 dark:bg-neutral-800 text-gray-400"
+                      }`}
+                    >
+                      {detectionStatus.addressTitle ? (
+                        <Check className="h-3.5 w-3.5 stroke-[3]" />
+                      ) : detectionStatus.step === "reverse" ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <span className="text-[10px] font-bold">2</span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-[var(--text-primary)]">Doorstep Locality</p>
+                      <p className="text-[10px] text-[var(--text-muted)] truncate">
+                        {detectionStatus.addressTitle || "Resolving street & society details..."}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Step 3: Express Dark Store */}
+                  <div className="flex items-center gap-2.5 text-xs">
+                    <div
+                      className={`flex h-6 w-6 items-center justify-center rounded-full shrink-0 transition-all ${
+                        detectionStatus.step === "complete"
+                          ? "bg-[#0c831f] text-white"
+                          : detectionStatus.step === "store"
+                          ? "bg-emerald-100 dark:bg-emerald-950/60 text-[#0c831f]"
+                          : "bg-gray-200 dark:bg-neutral-800 text-gray-400"
+                      }`}
+                    >
+                      {detectionStatus.step === "complete" ? (
+                        <Check className="h-3.5 w-3.5 stroke-[3]" />
+                      ) : detectionStatus.step === "store" ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <span className="text-[10px] font-bold">3</span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-[var(--text-primary)]">Nearest Dark Store & ETA</p>
+                      <p className="text-[10px] text-[var(--text-muted)] truncate">
+                        {detectionStatus.storeName
+                          ? `${detectionStatus.storeName} (${detectionStatus.etaMinutes || 8} mins)`
+                          : "Checking nearest express fulfillment hub..."}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Cancel Detection Button */}
+                <div className="text-center pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsLocating(false);
+                      setDetectionStatus({ step: "idle" });
+                    }}
+                    className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] underline cursor-pointer"
+                  >
+                    Cancel detection
+                  </button>
+                </div>
+              </div>
+            ) : detectionStatus.step === "error" ? (
+              /* Error State View with Retry / Manual Input */
+              <div className="p-4 rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/50 dark:bg-rose-950/20 space-y-3 text-center">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900/50 text-rose-600 dark:text-rose-400 mx-auto">
+                  <AlertCircle className="h-5 w-5" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-xs font-bold text-rose-900 dark:text-rose-200">
+                    Location Detection Failed
+                  </h4>
+                  <p className="text-[11px] text-rose-700 dark:text-rose-300">
+                    {detectionStatus.errorMessage || "Could not retrieve GPS location."}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 pt-1 justify-center">
+                  <Button
+                    size="sm"
+                    onClick={handleDetectLocation}
+                    className="h-8 bg-[#0c831f] hover:bg-[#0a6f1a] text-white text-xs font-semibold rounded-lg"
+                  >
+                    Try Again
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleAddNewAddress}
+                    className="h-8 text-xs font-semibold rounded-lg"
+                  >
+                    Enter Address Manually
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              /* Normal Idle View */
+              <>
+                {/* GPS Auto-Detect Button */}
+                <div className="space-y-1.5">
+                  <Button
+                    onClick={handleDetectLocation}
+                    disabled={isLocating}
+                    className="w-full h-11 bg-[#0c831f] hover:bg-[#0a6f1a] text-white flex items-center justify-center gap-2 font-bold text-xs sm:text-sm shadow-sm transition-all active:scale-[0.99] cursor-pointer rounded-xl"
+                  >
+                    <Navigation className="h-4 w-4 fill-white/20" />
+                    <span>Detect Current Location</span>
+                  </Button>
+                  <p className="text-[11px] text-[var(--text-muted)] text-center">
+                    Using device GPS for precise doorstep delivery
+                  </p>
+                </div>
+
+                {/* Saved Addresses Section */}
+                <div className="pt-3 border-t border-[var(--border)] space-y-2.5">
+                  <div className="flex items-center justify-between px-0.5">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-primary)]">
+                      <Bookmark className="h-3.5 w-3.5 text-[#0c831f]" />
+                      <span>Saved Addresses</span>
+                      {savedAddresses.length > 0 && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-100 text-[#0c831f] dark:bg-emerald-950/50">
+                          {savedAddresses.length}
+                        </span>
+                      )}
+                    </div>
                     <button
                       type="button"
-                      onClick={() => setIsEditingSociety((prev) => !prev)}
-                      className="text-[11px] font-bold text-[#0c831f] hover:underline flex items-center gap-1 cursor-pointer"
+                      onClick={handleAddNewAddress}
+                      className="text-[11px] font-bold text-[#0c831f] hover:underline flex items-center gap-0.5 cursor-pointer"
                     >
-                      <Edit3 className="h-3 w-3" />
-                      <span>{isEditingSociety ? "Hide flat/society details" : "Add or edit Flat / Society details"}</span>
+                      <Plus className="h-3 w-3" />
+                      <span>Add New</span>
                     </button>
                   </div>
 
-                  {isEditingSociety && (
-                    <div className="mt-2 pt-2.5 border-t border-[var(--border)] space-y-2">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[10px] font-semibold text-[var(--text-muted)] uppercase">
-                            Shop / Flat No.
-                          </label>
-                          <Input
-                            value={houseNo}
-                            onChange={(e) => setHouseNo(e.target.value)}
-                            placeholder="e.g. Flat 402"
-                            className="h-8 text-xs mt-0.5 bg-[var(--surface)]"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-semibold text-[var(--text-muted)] uppercase">
-                            Society / Building
-                          </label>
-                          <Input
-                            value={society}
-                            onChange={(e) => setSociety(e.target.value)}
-                            placeholder="e.g. Kahan Park"
-                            className="h-8 text-xs mt-0.5 bg-[var(--surface)]"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-semibold text-[var(--text-muted)] uppercase">
-                          Landmark (Optional)
-                        </label>
-                        <Input
-                          value={landmark}
-                          onChange={(e) => setLandmark(e.target.value)}
-                          placeholder="e.g. Near Big Bazaar"
-                          className="h-8 text-xs mt-0.5 bg-[var(--surface)]"
-                        />
-                      </div>
+                  {isLoadingAddresses ? (
+                    <div className="p-6 text-center text-xs text-[var(--text-muted)] flex items-center justify-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-[#0c831f]" />
+                      <span>Loading saved addresses...</span>
                     </div>
-                  )}
+                  ) : savedAddresses.length > 0 ? (
+                    <div className="space-y-2 max-h-60 overflow-y-auto pr-0.5">
+                      {savedAddresses.map((addr) => {
+                        const isHome = addr.address_type === "HOME";
+                        const isWork = addr.address_type === "WORK";
+                        const isSelected =
+                          currentLocation.id === addr.id ||
+                          (currentLocation as any).savedAddressId === addr.id ||
+                          (currentLocation.houseNo &&
+                            addr.address_line_1?.toLowerCase().trim() ===
+                              currentLocation.houseNo?.toLowerCase().trim());
 
-                  {/* Confirm & Deliver Button */}
-                  <div className="pt-2">
-                    <Button
-                      onClick={handleSaveAndConfirm}
-                      disabled={currentLocation.isServiceable === false}
-                      className="w-full h-9 bg-[#0c831f] hover:bg-[#0a6f1a] disabled:bg-gray-400 text-white font-bold text-xs flex items-center justify-center gap-2 rounded-xl cursor-pointer shadow-xs active:scale-[0.99]"
-                    >
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      <span>{currentLocation.isServiceable === false ? "Cannot Deliver Here" : "Confirm & Deliver to This Address"}</span>
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              {/* SECTION 2: Saved Addresses (Home, Work, Other) */}
-              <div className="space-y-2 pt-2 border-t border-[var(--border)]/70">
-                <div className="flex items-center justify-between px-0.5">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-primary)]">
-                    <Bookmark className="h-3.5 w-3.5 text-[#0c831f]" />
-                    <span>Saved Addresses</span>
-                    {savedAddresses.length > 0 && (
-                      <span className="ml-1 text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-100 text-[#0c831f]">
-                        {savedAddresses.length}
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleAddNewAddress}
-                    className="text-[11px] font-bold text-[#0c831f] hover:underline flex items-center gap-0.5 cursor-pointer"
-                  >
-                    <Plus className="h-3 w-3" />
-                    <span>Add New</span>
-                  </button>
-                </div>
-
-                {savedAddresses.length > 0 ? (
-                  <div className="space-y-2">
-                    {savedAddresses.map((addr) => {
-                      const isHome = addr.address_type === "HOME";
-                      const isWork = addr.address_type === "WORK";
-                      const isSelected =
-                        currentLocation.id === addr.id ||
-                        (currentLocation as any).savedAddressId === addr.id ||
-                        (currentLocation.houseNo &&
-                          addr.address_line_1.toLowerCase().trim() === currentLocation.houseNo.toLowerCase().trim());
-
-                      return (
-                        <div
-                          key={addr.id}
-                          onClick={() => handleSelectSavedAddress(addr)}
-                          className={`group flex items-start gap-2.5 p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                            isSelected
-                              ? "border-[#0c831f] bg-emerald-50/30 dark:bg-emerald-950/20 shadow-xs"
-                              : "border-[var(--border)] bg-[var(--surface)] hover:border-[#0c831f]/40 hover:bg-gray-50/70 dark:hover:bg-neutral-800/50"
-                          }`}
-                        >
-                          {/* Type Icon */}
+                        return (
                           <div
-                            className={`flex h-8 w-8 items-center justify-center rounded-xl shrink-0 mt-0.5 ${
-                              isHome
-                                ? "bg-blue-50 text-blue-600"
-                                : isWork
-                                ? "bg-amber-50 text-amber-600"
-                                : "bg-emerald-50 text-[#0c831f]"
+                            key={addr.id}
+                            onClick={() => handleSelectSavedAddress(addr)}
+                            className={`group flex items-start gap-2.5 p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                              isSelected
+                                ? "border-[#0c831f] bg-emerald-50/40 dark:bg-emerald-950/20 shadow-xs ring-1 ring-[#0c831f]/20"
+                                : "border-[var(--border)] bg-[var(--surface)] hover:border-[#0c831f]/40 hover:bg-gray-50/70 dark:hover:bg-neutral-800/50"
                             }`}
                           >
-                            {isHome ? (
-                              <Home className="h-4 w-4" />
-                            ) : isWork ? (
-                              <Briefcase className="h-4 w-4" />
-                            ) : (
-                              <MapPin className="h-4 w-4" />
-                            )}
-                          </div>
-
-                          {/* Address Details */}
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-xs font-black text-[var(--text-primary)]">
-                                {addr.address_type || "HOME"}
-                              </span>
-                              {addr.is_default && (
-                                <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-gray-300">
-                                  Default
-                                </span>
-                              )}
-                              {isSelected && (
-                                <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-emerald-100 text-[#0c831f] ml-auto flex items-center gap-0.5">
-                                  <Check className="h-2.5 w-2.5" />
-                                  Selected
-                                </span>
+                            {/* Type Icon */}
+                            <div
+                              className={`flex h-8 w-8 items-center justify-center rounded-xl shrink-0 mt-0.5 ${
+                                isHome
+                                  ? "bg-blue-50 text-blue-600 dark:bg-blue-950/40"
+                                  : isWork
+                                  ? "bg-amber-50 text-amber-600 dark:bg-amber-950/40"
+                                  : "bg-emerald-50 text-[#0c831f] dark:bg-emerald-950/40"
+                              }`}
+                            >
+                              {isHome ? (
+                                <Home className="h-4 w-4" />
+                              ) : isWork ? (
+                                <Briefcase className="h-4 w-4" />
+                              ) : (
+                                <MapPin className="h-4 w-4" />
                               )}
                             </div>
 
-                            <p className="text-xs font-semibold text-[var(--text-secondary)] mt-0.5 truncate">
-                              {addr.recipient_name} {addr.recipient_phone ? `• ${addr.recipient_phone}` : ""}
-                            </p>
-                            <p className="text-[11px] text-[var(--text-muted)] line-clamp-2 mt-0.5 leading-snug">
-                              {[addr.address_line_1, addr.address_line_2, addr.landmark, addr.area_name, addr.city_name, addr.pincode]
-                                .filter(Boolean)
-                                .join(", ")}
-                            </p>
+                            {/* Address Details */}
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-xs font-black text-[var(--text-primary)]">
+                                  {addr.address_type || "HOME"}
+                                </span>
+                                {addr.is_default && (
+                                  <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-gray-300">
+                                    Default
+                                  </span>
+                                )}
+                                {isSelected && (
+                                  <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-emerald-100 text-[#0c831f] dark:bg-emerald-950/50 ml-auto flex items-center gap-0.5">
+                                    <Check className="h-2.5 w-2.5" />
+                                    Selected
+                                  </span>
+                                )}
+                              </div>
+
+                              <p className="text-xs font-semibold text-[var(--text-secondary)] mt-0.5 truncate">
+                                {addr.recipient_name}
+                                {addr.recipient_phone ? ` • ${addr.recipient_phone}` : ""}
+                              </p>
+                              <p className="text-[11px] text-[var(--text-muted)] line-clamp-2 mt-0.5 leading-snug">
+                                {[
+                                  addr.address_line_1,
+                                  addr.address_line_2,
+                                  addr.landmark,
+                                  addr.area_name,
+                                  addr.city_name,
+                                  addr.pincode,
+                                ]
+                                  .filter(Boolean)
+                                  .join(", ")}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  /* Prompt when no saved addresses */
-                  <div className="rounded-xl border border-dashed border-[var(--border)] p-3.5 text-center space-y-1.5 bg-[var(--surface-secondary)]/30">
-                    <p className="text-xs font-medium text-[var(--text-secondary)]">
-                      {isAuthenticated
-                        ? "You haven't saved any doorstep addresses yet."
-                        : "Sign in to view your saved addresses for 1-tap checkout."}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={isAuthenticated ? handleAddNewAddress : handleLoginClick}
-                      className="text-xs font-bold text-[#0c831f] hover:underline inline-flex items-center gap-1 cursor-pointer"
-                    >
-                      <Plus className="h-3 w-3" />
-                      <span>{isAuthenticated ? "Add new delivery address" : "Sign in to view saved addresses"}</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Delivery Areas for Guest 1-Tap Store Resolution */}
-              <div className="space-y-2 pt-2 border-t border-[var(--border)]/70">
-                <div className="flex items-center justify-between px-0.5">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-primary)]">
-                    <Building className="h-3.5 w-3.5 text-[#0c831f]" />
-                    <span>Select Delivery Area (Change Dark Store)</span>
-                  </div>
-                </div>
-
-                {isLoadingAreas ? (
-                  <div className="p-4 text-center text-xs text-[var(--text-muted)] flex items-center justify-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin text-[#0c831f]" />
-                    <span>Loading delivery areas...</span>
-                  </div>
-                ) : availableAreas.length > 0 ? (
-                  <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
-                    {availableAreas.map((ar) => {
-                      const isSelected =
-                        currentLocation.areaId === ar.id ||
-                        currentLocation.area.toLowerCase().includes(ar.name.toLowerCase());
-
-                      return (
-                        <button
-                          key={ar.id}
-                          type="button"
-                          onClick={() => handleSelectArea(ar)}
-                          className={`flex items-center gap-2 p-2 rounded-xl border text-left transition-all cursor-pointer ${
-                            isSelected
-                              ? "border-[#0c831f] bg-emerald-50/50 dark:bg-emerald-950/20 text-[#0c831f] font-bold shadow-xs ring-1 ring-[#0c831f]/20"
-                              : "border-[var(--border)] bg-[var(--surface)] hover:border-[#0c831f]/40 hover:bg-gray-50/60 dark:hover:bg-neutral-800/50 text-[var(--text-primary)]"
-                          }`}
-                        >
-                          <div className={`flex h-6 w-6 items-center justify-center rounded-lg shrink-0 ${
-                            isSelected ? "bg-[#0c831f] text-white" : "bg-emerald-50 text-[#0c831f]"
-                          }`}>
-                            <MapPin className="h-3 w-3" />
-                          </div>
-                          <span className="text-xs truncate font-medium">{ar.name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="p-2 text-center text-[11px] text-[var(--text-muted)]">
-                    Search above to find any society, building, or area.
-                  </div>
-                )}
-              </div>
-
-
-              {/* SECTION 3: Manage Addresses Direct Action */}
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={handleAddNewAddress}
-                  className="w-full flex items-center justify-between p-2.5 rounded-xl border border-[var(--border)] hover:border-[#0c831f]/40 bg-[var(--surface)] hover:bg-gray-50/60 dark:hover:bg-neutral-800/50 transition-colors text-xs font-bold text-[var(--text-primary)] cursor-pointer"
-                >
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-50 text-[#0c831f]">
-                      <Plus className="h-3.5 w-3.5" />
+                        );
+                      })}
                     </div>
-                    <span>Manage all saved delivery addresses</span>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-[var(--text-muted)]" />
-                </button>
-              </div>
-            </>
-          )}
-        </div>
+                  ) : (
+                    /* Empty state when no saved addresses */
+                    <div className="rounded-xl border border-dashed border-[var(--border)] p-4 text-center space-y-2 bg-[var(--surface-secondary)]/30">
+                      <p className="text-xs font-medium text-[var(--text-secondary)]">
+                        {isAuthenticated
+                          ? "You haven't saved any doorstep addresses yet."
+                          : "Sign in to view and save delivery addresses for 1-tap checkout."}
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={isAuthenticated ? handleAddNewAddress : handleLoginClick}
+                        className="text-xs font-bold text-[#0c831f] border-[#0c831f]/30 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 cursor-pointer"
+                      >
+                        <Plus className="h-3.5 w-3.5 mr-1" />
+                        <span>
+                          {isAuthenticated ? "Add Delivery Address" : "Sign In to View Addresses"}
+                        </span>
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
-        {/* Footer Hub Info */}
-        <div className="bg-[var(--surface-secondary)] px-4 sm:px-5 py-2.5 border-t border-[var(--border)] flex items-center justify-between text-[11px] text-[var(--text-secondary)]">
-          <span className="flex items-center gap-1.5 truncate max-w-[260px]">
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${
-                currentLocation.isServiceable !== false ? "bg-[#0c831f]" : "bg-amber-500"
-              }`}
-            />
-            <span className="truncate">Fulfilled by: {currentLocation.darkStoreName || "Express Dark Store"}</span>
-          </span>
-          <span
-            className={`font-black shrink-0 ${
-              currentLocation.isServiceable !== false ? "text-[#0c831f]" : "text-amber-600"
-            }`}
-          >
-            {currentLocation.isServiceable !== false
-              ? `⚡ ${currentLocation.deliveryEtaMinutes || 8} mins delivery`
-              : "Unserviceable"}
-          </span>
-        </div>
-      </DialogContent>
-    </Dialog>
-
-    {/* Dedicated Add / Edit Doorstep Address Modal */}
-    <AddressModal
-      isOpen={isAddressModalOpen}
-      onClose={() => setIsAddressModalOpen(false)}
-      onSave={handleSaveNewAddress}
-    />
-  </>
+      {/* Add / Save Doorstep Delivery Address Modal */}
+      <AddressModal
+        isOpen={isAddressModalOpen}
+        onClose={() => {
+          setIsAddressModalOpen(false);
+          setDetectedLocationData(null);
+        }}
+        detectedLocation={detectedLocationData}
+        onSave={handleSaveNewAddress}
+        isSaving={createAddressMutation.isPending}
+      />
+    </>
   );
 }

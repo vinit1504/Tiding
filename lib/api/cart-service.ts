@@ -37,6 +37,17 @@ export function normalizeBackendCartItem(item: BackendCartItem): CartItem {
 
   const mrp = Number(item.unit_price) > price ? Number(item.unit_price) : Math.round(price * 1.15);
 
+  let cleanUnit = item.variant_name || "1 unit";
+  if (item.variant_name) {
+    const parenthesized = item.variant_name.match(/\(([^)]+)\)/);
+    if (parenthesized && parenthesized[1]) {
+      cleanUnit = parenthesized[1].trim();
+    } else if (item.product_name && item.variant_name !== item.product_name) {
+      const stripped = item.variant_name.replace(item.product_name, "").trim();
+      if (stripped) cleanUnit = stripped;
+    }
+  }
+
   return {
     id: item.id || item.variant_id || item.product_id,
     cartItemId: item.id,
@@ -47,7 +58,7 @@ export function normalizeBackendCartItem(item: BackendCartItem): CartItem {
     image_url:
       item.thumbnail_url ||
       "https://res.cloudinary.com/dktxfhq00/image/upload/v1790058895/tiding/avatars/xub5yhdvvd46adh8uoiv.png",
-    unit: item.variant_name || "1 unit",
+    unit: cleanUnit,
     price,
     mrp,
     quantity: Number(item.quantity || 1),

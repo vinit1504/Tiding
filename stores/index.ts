@@ -4,3 +4,4 @@ export * from "./location-atom";
 export * from "./search-atom";
 export * from "./ui-atom";
 export * from "./user-atom";
+export * from "./wishlist-atom";

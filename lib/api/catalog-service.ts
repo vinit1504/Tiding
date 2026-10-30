@@ -106,6 +106,17 @@ export function normalizeProduct(item: any, inventoryMap?: Map<string, any>): Ca
       ? vMatch.attributes
       : [{ attribute_name: "Pack Size", value: v.variant_name || v.unit || unit }];
 
+    const vImageUrl =
+      v.image_url ||
+      v.image ||
+      (Array.isArray(v.images) && (v.images.find((img: any) => img?.is_primary)?.image_url || v.images[0]?.image_url || (typeof v.images[0] === "string" ? v.images[0] : null))) ||
+      vMatch?.image_url;
+    const vImages = Array.isArray(v.images) && v.images.length > 0
+      ? v.images
+      : Array.isArray(vMatch?.images) && vMatch.images.length > 0
+      ? vMatch.images
+      : (vImageUrl ? [{ image_url: vImageUrl, is_primary: true }] : []);
+
     return {
       id: v.id,
       sku: v.sku || vMatch?.sku,
@@ -122,6 +133,8 @@ export function normalizeProduct(item: any, inventoryMap?: Map<string, any>): Ca
       is_available: vAvail,
       is_in_stock: vAvail,
       attributes: vAttrs,
+      image_url: vImageUrl || imageUrl,
+      images: vImages.length > 0 ? vImages : (imageUrl ? [{ image_url: imageUrl, is_primary: true }] : []),
     };
   });
 
@@ -141,6 +154,8 @@ export function normalizeProduct(item: any, inventoryMap?: Map<string, any>): Ca
     is_available: isAvailable,
     is_in_stock: isAvailable,
     attributes: defVariant.attributes || [{ attribute_name: "Pack Size", value: defVariant.variant_name || unit }],
+    image_url: defVariant.image_url || defVariant.image || imageUrl,
+    images: Array.isArray(defVariant.images) && defVariant.images.length > 0 ? defVariant.images : (defVariant.image_url ? [{ image_url: defVariant.image_url, is_primary: true }] : []),
   } : undefined;
 
   const normalizedSelectedVariant = item.selected_variant ? {
@@ -162,6 +177,8 @@ export function normalizeProduct(item: any, inventoryMap?: Map<string, any>): Ca
     is_available: item.selected_variant.is_in_stock !== false && item.selected_variant.is_available !== false && isAvailable,
     is_in_stock: item.selected_variant.is_in_stock !== false && item.selected_variant.is_available !== false && isAvailable,
     attributes: item.selected_variant.attributes || [{ attribute_name: "Pack Size", value: item.selected_variant.variant_name || unit }],
+    image_url: item.selected_variant.image_url || item.selected_variant.image || imageUrl,
+    images: Array.isArray(item.selected_variant.images) && item.selected_variant.images.length > 0 ? item.selected_variant.images : (item.selected_variant.image_url ? [{ image_url: item.selected_variant.image_url, is_primary: true }] : []),
   } : undefined;
 
   return {

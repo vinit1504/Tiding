@@ -5,7 +5,7 @@ import { SITE_CONFIG } from "@/lib/constants/site-config";
 import { Phone, Mail, MapPin, Headphones, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AccountSidebar } from "@/components/account/account-sidebar";
+import { AccountLayout } from "@/components/account/account-layout";
 import { toast } from "sonner";
 
 export default function ContactPage() {
@@ -29,13 +29,7 @@ export default function ContactPage() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-80px)] bg-[#f4f6fb] py-6 sm:py-8">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row gap-6 items-start">
-        {/* Left Sidebar */}
-        <AccountSidebar activeTab="support" />
-
-        {/* Right Main Content */}
-        <main className="flex-1 space-y-6">
+    <AccountLayout activeTab="support" mainClassName="space-y-6">
           {/* Header Card */}
           <div className="bg-white rounded-2xl border border-gray-200/80 p-6 space-y-2 shadow-xs">
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -124,8 +118,6 @@ export default function ContactPage() {
               </form>
             </div>
           </div>
-        </main>
-      </div>
-    </div>
+    </AccountLayout>
   );
 }

@@ -16,19 +16,86 @@ type PageProps = {
 };
 
 const DEFAULT_DARK_STORE_ID = "2a6ba8df-637f-4939-bc17-69ad6832c050";
+const DEFAULT_STOCK = 99; // API doesn't send stock yet
 
 const calcDiscount = (price: number, mrp: number) =>
   mrp > price ? Math.round(((mrp - price) / mrp) * 100) : 0;
+
+// Works whether the service returns the envelope ({success, data}) or just data
+function unwrap(res: any) {
+  if (res && typeof res === "object" && res.data && res.data.id) return res.data;
+  return res;
+}
+
+// images: [{image_url, is_primary, display_order}] -> string[] (primary first)
+function toImageUrls(imgs: any[] | undefined, singleUrl?: string): string[] {
+  const list = (imgs ?? [])
+    .slice()
+    .sort(
+      (a, b) =>
+        (b?.is_primary ? 1 : 0) - (a?.is_primary ? 1 : 0) ||
+        (a?.display_order ?? 0) - (b?.display_order ?? 0)
+    )
+    .map((i) => (typeof i === "string" ? i : i?.image_url))
+    .filter(Boolean);
+
+  if (singleUrl && !list.includes(singleUrl)) {
+    list.unshift(singleUrl);
+  }
+  return list;
+}
 
 function pickVariant(raw: any, variantId?: string) {
   const list: any[] = raw.variants ?? [];
   return (
     list.find((v) => v.id === variantId) ||
-    raw.selected_variant ||
-    raw.default_variant ||
+    list.find((v) => v.id === raw.selected_variant_id) ||
+    list.find((v) => v.id === raw.default_variant_id) ||
+    list.find((v) => v.is_default) ||
+    list.find((v) => v.status === "ACTIVE") ||
     list[0] ||
     null
   );
+}
+
+function mapVariant(v: any, fallbackImage?: string) {
+  const single = typeof v.image_url === "string" ? v.image_url : undefined;
+  const imgs = toImageUrls(v.images, single);
+  const variantImg = imgs[0] ?? single ?? fallbackImage;
+  const allImgs = imgs.length > 0 ? imgs : (variantImg ? [variantImg] : []);
+  const attr = v.attributes?.[0];
+  const unit: string = attr?.display_value || attr?.value || v.unit || v.variant_name || "1 pack";
+
+  const rawStock = v.stock_quantity ?? v.stock;
+  const hasStock = typeof rawStock === "number" && !isNaN(rawStock);
+  const oos =
+    v.is_in_stock === false ||
+    v.is_available === false ||
+    v.isAvailable === false ||
+    (v.status && v.status !== "ACTIVE") ||
+    (hasStock && rawStock <= 0);
+  const stock = hasStock ? rawStock : DEFAULT_STOCK;
+  const selling = Number(v.selling_price ?? v.price ?? 0);
+
+  return {
+    id: v.id,
+    sku: v.sku,
+    barcode: v.barcode,
+    unit,
+    variant_name: unit, // clean label e.g. "250 g"
+    full_name: v.variant_name,
+    price: selling,
+    selling_price: selling,
+    mrp: Number(v.mrp ?? selling),
+    weight_in_grams: v.weight_in_grams,
+    stock,
+    stock_quantity: stock,
+    isAvailable: !oos,
+    is_in_stock: !oos,
+    image_url: variantImg,
+    images: allImgs,
+    attributes: v.attributes ?? [],
+  };
 }
 
 // ---------- metadata ----------
@@ -38,19 +105,20 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
   const variantParam = sParams.variantId || sParams.variant;
   const cookieStore = await cookies();
   const storeId = cookieStore.get("tiding_store_id")?.value || DEFAULT_DARK_STORE_ID;
-  const raw: any = await catalogService.getProductByIdOrSlug(slug, storeId, variantParam);
+  const raw: any = unwrap(await catalogService.getProductByIdOrSlug(slug, storeId, variantParam));
   if (!raw) return { title: "Product Not Found" };
 
   const v = pickVariant(raw, variantParam);
   const price = v?.selling_price ?? raw.price;
+  const image = toImageUrls(v?.images)[0] ?? toImageUrls(raw.variants?.flatMap((x: any) => x.images ?? []))[0];
 
   return {
-    title: `${raw.name}${v?.variant_name ? ` (${v.variant_name})` : ""} - ${formatCurrency(price)} | ${SITE_CONFIG.name}`,
+    title: `${raw.name} - ${formatCurrency(price)} | ${SITE_CONFIG.name}`,
     description: raw.description,
     openGraph: {
       title: `${raw.name} | ${SITE_CONFIG.name}`,
       description: raw.description,
-      images: raw.image_url ? [{ url: raw.image_url }] : [],
+      images: image ? [{ url: image }] : [],
     },
   };
 }
@@ -64,130 +132,70 @@ export default async function ProductDetailPage({ params, searchParams }: PagePr
   const cookieStore = await cookies();
   const storeId = cookieStore.get("tiding_store_id")?.value || DEFAULT_DARK_STORE_ID;
 
-  // 1. Fetch product with variant resolution from backend with x-store-id
-  const raw: any = await catalogService.getProductByIdOrSlug(slug, storeId, variantParam);
+  const raw: any = unwrap(await catalogService.getProductByIdOrSlug(slug, storeId, variantParam));
   if (!raw) notFound();
 
   const brandName = typeof raw.brand === "string" ? raw.brand : raw.brand?.name || "Tiding";
-  const variants: any[] = raw.variants ?? [];
-  const selected = pickVariant(raw, variantParam);
+  const rawVariants: any[] = raw.variants ?? [];
+  const selectedRaw = pickVariant(raw, variantParam);
 
-  // price / stock come from the resolved selected variant
-  const price = selected?.selling_price ?? raw.price;
+  // Product-level base images (not merging every other variant's images)
+  const productBaseImages = toImageUrls(raw.images, raw.image_url);
+  const selectedVariantImages = toImageUrls(selectedRaw?.images, selectedRaw?.image_url);
+  const mainImage = selectedVariantImages[0] || productBaseImages[0] || raw.image_url;
+
+  const variants = rawVariants.map((v) => mapVariant(v, mainImage));
+  const selected = variants.find((v) => v.id === selectedRaw?.id) ?? variants[0];
+  const defaultVariant = variants.find((v) => v.id === raw.default_variant_id) ?? variants.find((_, i) => rawVariants[i].is_default);
+
+  const price = selected?.selling_price ?? raw.price ?? 0;
   const mrp = selected?.mrp ?? raw.mrp ?? price;
+  const inStock = selected ? selected.isAvailable : raw.is_active !== false;
 
-  const rawStock = selected?.stock_quantity ?? selected?.stock ?? raw.stock_quantity ?? raw.stock;
-  const stock = typeof rawStock === "number" && !isNaN(rawStock) && rawStock > 0 ? rawStock : (raw.stock ?? 100);
+  const category = raw.category ?? {};
+  const subcategory = raw.subcategory ?? {};
+  const categoryId = category.id ?? raw.category_id ?? "";
 
-  const isExplicitlyOOS =
-    selected?.is_in_stock === false ||
-    selected?.is_available === false ||
-    selected?.isAvailable === false ||
-    raw.is_in_stock === false ||
-    raw.is_available === false ||
-    raw.isAvailable === false ||
-    (typeof rawStock === "number" && rawStock <= 0);
-
-  const inStock = !isExplicitlyOOS;
-  const unit = selected?.variant_name || selected?.unit || raw.unit || "1 pack";
-  const discountPercentage = calcDiscount(price, mrp);
-
-  const product: Product = {
+  const product = {
     id: raw.id,
     name: raw.name,
     slug: raw.slug,
     brand: brandName,
     description: raw.description || "",
-    image_url: raw.image_url,
-    images: Array.isArray(raw.images) && raw.images.length > 0
-      ? raw.images
-      : raw.image_url
-      ? [raw.image_url]
-      : [],
-    category_id: raw.category_id || "",
-    category_name: raw.category_name || "Daily Essentials",
-    category_slug: raw.category_slug || "essentials",
-    subcategory_id: raw.subcategory_id || "",
-    subcategory_name: raw.subcategory_name || "",
+    image_url: mainImage,
+    images: productBaseImages.length > 0 ? productBaseImages : (mainImage ? [mainImage] : []),
+    category_id: categoryId,
+    category_name: category.name ?? raw.category_name ?? "Daily Essentials",
+    category_slug: category.slug ?? raw.category_slug ?? "essentials",
+    subcategory_id: subcategory.id ?? raw.subcategory_id ?? "",
+    subcategory_name: subcategory.name ?? raw.subcategory_name ?? "",
     price,
     mrp,
-    discountPercentage,
-    unit,
-    stock,
+    discountPercentage: calcDiscount(price, mrp),
+    unit: selected?.unit ?? raw.unit ?? "1 pack",
+    stock: selected?.stock ?? DEFAULT_STOCK,
     isAvailable: inStock,
     deliveryEtaMinutes: raw.deliveryEtaMinutes || 8,
-    rating: raw.rating || 4.8,
-    ratingCount: raw.ratingCount || 120,
-    selected_variant: selected
-      ? {
-          id: selected.id,
-          sku: selected.sku,
-          unit: selected.variant_name || selected.unit || unit,
-          variant_name: selected.variant_name || unit,
-          price: Number(selected.selling_price ?? price),
-          selling_price: Number(selected.selling_price ?? price),
-          mrp: Number(selected.mrp ?? mrp),
-          stock: typeof selected.stock_quantity === "number" ? selected.stock_quantity : stock,
-          stock_quantity: typeof selected.stock_quantity === "number" ? selected.stock_quantity : stock,
-          isAvailable: selected.is_in_stock !== false && selected.is_available !== false && inStock,
-          is_in_stock: selected.is_in_stock !== false && selected.is_available !== false && inStock,
-          image_url: selected.image_url || raw.image_url,
-          attributes: selected.attributes,
-        }
-      : undefined,
-    default_variant: raw.default_variant
-      ? {
-          id: raw.default_variant.id,
-          sku: raw.default_variant.sku,
-          unit: raw.default_variant.variant_name || raw.default_variant.unit || unit,
-          variant_name: raw.default_variant.variant_name || unit,
-          price: Number(raw.default_variant.selling_price ?? price),
-          selling_price: Number(raw.default_variant.selling_price ?? price),
-          mrp: Number(raw.default_variant.mrp ?? mrp),
-          stock: typeof raw.default_variant.stock_quantity === "number" ? raw.default_variant.stock_quantity : stock,
-          stock_quantity: typeof raw.default_variant.stock_quantity === "number" ? raw.default_variant.stock_quantity : stock,
-          isAvailable: raw.default_variant.is_in_stock !== false && raw.default_variant.is_available !== false && inStock,
-          is_in_stock: raw.default_variant.is_in_stock !== false && raw.default_variant.is_available !== false && inStock,
-          image_url: raw.default_variant.image_url || raw.image_url,
-          attributes: raw.default_variant.attributes,
-        }
-      : undefined,
-    variants: variants.map((v) => {
-      const vStockRaw = v.stock_quantity ?? v.stock;
-      const vStock = typeof vStockRaw === "number" && !isNaN(vStockRaw) && vStockRaw > 0 ? vStockRaw : stock;
-      const vIsOOS =
-        v.is_in_stock === false ||
-        v.is_available === false ||
-        v.isAvailable === false ||
-        v.status === "INACTIVE" ||
-        (typeof vStockRaw === "number" && vStockRaw <= 0);
+    // only real ratings are shown; no fake fallback
+    rating: raw.rating ?? undefined,
+    ratingCount: raw.ratingCount ?? undefined,
+    is_veg: raw.food_preference ? raw.food_preference !== "NON_VEG" : true,
+    food_preference: raw.food_preference,
+    product_type: raw.product_type,
+    tags: raw.tags ?? [],
+    selected_variant: selected,
+    default_variant: defaultVariant,
+    variants,
+    attributes: selected?.attributes ?? [],
+  } as unknown as Product;
 
-      return {
-        id: v.id,
-        sku: v.sku,
-        unit: v.variant_name || v.unit || "1 pack",
-        variant_name: v.variant_name || v.unit || "1 pack",
-        price: Number(v.selling_price ?? v.price ?? price),
-        selling_price: Number(v.selling_price ?? v.price ?? price),
-        mrp: Number(v.mrp ?? mrp),
-        stock: vStock,
-        stock_quantity: vStock,
-        isAvailable: !vIsOOS,
-        is_in_stock: !vIsOOS,
-        image_url: v.image_url || raw.image_url,
-        attributes: v.attributes,
-      };
-    }),
-    attributes: selected?.attributes ?? raw.attributes ?? [],
-  };
-
-  // 2. Fetch similar products in category for recommendations
+  // Similar products
   const categoryProducts = await catalogService.getProducts({
-    category_id: isUuid(product.category_id) ? product.category_id : undefined,
+    category_id: isUuid(categoryId) ? categoryId : undefined,
     limit: 10,
   });
 
-  const relatedProducts: Product[] = categoryProducts
+  const relatedProducts: Product[] = (categoryProducts ?? [])
     .filter((p: any) => p.id !== product.id)
     .slice(0, 5)
     .map((p: any) => ({
@@ -209,8 +217,8 @@ export default async function ProductDetailPage({ params, searchParams }: PagePr
       stock: p.stock,
       isAvailable: p.isAvailable,
       deliveryEtaMinutes: p.deliveryEtaMinutes || 8,
-      rating: p.rating || 4.8,
-      ratingCount: p.ratingCount || 120,
+      rating: p.rating,
+      ratingCount: p.ratingCount,
     }));
 
   return (

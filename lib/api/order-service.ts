@@ -16,10 +16,17 @@ export class OrderService {
    * POST /api/v1/orders
    * Create an order from active cart items
    */
-  async createOrder(payload: CreateOrderPayload): Promise<CreateOrderResponse> {
-    const res = await apiClient.post<{ data: CreateOrderResponse; success: boolean } | CreateOrderResponse, CreateOrderPayload>(
+  async createOrder(
+    payload: CreateOrderPayload,
+    fallbackData?: CreateOrderResponse
+  ): Promise<CreateOrderResponse> {
+    const res = await apiClient.post<
+      { data: CreateOrderResponse; success: boolean } | CreateOrderResponse,
+      CreateOrderPayload
+    >(
       API_ENDPOINTS.ORDERS.CREATE,
-      payload
+      payload,
+      fallbackData ? { fallbackData } : undefined
     );
     if (res && "data" in res && (res as any).data) {
       return (res as any).data;

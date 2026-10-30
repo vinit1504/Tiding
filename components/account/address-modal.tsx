@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import dynamic from "next/dynamic";
+import { useAtom } from "jotai";
 import {
   X,
   Search,
@@ -9,20 +11,59 @@ import {
   Home,
   Building,
   Bed,
+  CheckCircle2,
+  Loader2,
+  Zap,
+  Globe2,
   Compass,
-  Check,
+  Building2,
+  Hash,
 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { SavedAddress } from "@/types/location";
+import { SavedAddress, DeliveryLocation } from "@/types/location";
+import { userProfileAtom } from "@/stores";
+import {
+  useCountriesQuery,
+  useStatesQuery,
+  useCitiesQuery,
+  usePincodesQuery,
+  useAreasQuery,
+} from "@/queries/location/use-location-hierarchy-queries";
+import { locationService } from "@/lib/api/location-service";
 import { toast } from "sonner";
+import type { MapLocationResult } from "@/components/location/interactive-map";
+
+// Dynamically import InteractiveMap (client-side Leaflet)
+const InteractiveMap = dynamic(
+  () => import("@/components/location/interactive-map"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-full min-h-[360px] flex flex-col items-center justify-center bg-neutral-100 dark:bg-neutral-800 text-neutral-500 rounded-2xl">
+        <Loader2 className="h-8 w-8 text-[#0c831f] animate-spin mb-2" />
+        <span className="text-xs font-semibold">Loading Live Map...</span>
+      </div>
+    ),
+  }
+);
 
 interface AddressModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (addressData: Partial<SavedAddress> & { floor?: string }) => void;
+  onSave: (addressData: Partial<SavedAddress> & {
+    floor?: string;
+    houseNo?: string;
+    countryId?: string;
+    stateId?: string;
+    cityId?: string;
+    pincodeId?: string;
+    areaId?: string;
+  }) => void;
   initialData?: SavedAddress | null;
+  detectedLocation?: DeliveryLocation | null;
+  isSaving?: boolean;
 }
 
 export function AddressModal({
@@ -30,38 +71,277 @@ export function AddressModal({
   onClose,
   onSave,
   initialData,
+  detectedLocation,
+  isSaving = false,
 }: AddressModalProps) {
+  const [user] = useAtom(userProfileAtom);
   const [addressType, setAddressType] = useState<"home" | "work" | "hotel" | "other">(
     (initialData?.type as any) || "home"
   );
   const [houseNo, setHouseNo] = useState("");
   const [floor, setFloor] = useState("");
-  const [area, setArea] = useState("Bapunagar, Ahmedabad");
   const [landmark, setLandmark] = useState("");
-  const [name, setName] = useState("Vinit");
-  const [phone, setPhone] = useState("7567337686");
-  const [searchMapQuery, setSearchMapQuery] = useState(
-    "Shop no. 1, Kahan Park, nr. Varsa Society, nr..."
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [searchMapQuery, setSearchMapQuery] = useState("");
+
+  // Map coordinates
+  const [currentCoords, setCurrentCoords] = useState<{ latitude: number; longitude: number }>(
+    detectedLocation?.coordinates || initialData?.coordinates || { latitude: 21.1702, longitude: 72.8311 }
   );
 
+  // Dynamic Geographic Hierarchy State
+  const [selectedCountryId, setSelectedCountryId] = useState<string>("");
+  const [selectedStateId, setSelectedStateId] = useState<string>("");
+  const [selectedCityId, setSelectedCityId] = useState<string>("");
+  const [selectedPincodeId, setSelectedPincodeId] = useState<string>("");
+  const [selectedAreaId, setSelectedAreaId] = useState<string>("");
+  const [customAreaName, setCustomAreaName] = useState<string>("");
+
+  const [resolvedStoreInfo, setResolvedStoreInfo] = useState<{
+    storeName?: string;
+    deliveryEtaMinutes?: number;
+  }>({});
+
+  // 1. Fetch Countries (defaults to India)
+  const { data: countries = [], isLoading: isLoadingCountries } = useCountriesQuery();
+
+  // Set default country when loaded
   useEffect(() => {
-    if (initialData) {
+    if (countries.length > 0 && !selectedCountryId) {
+      const india = countries.find((c) => c.code === "IN" || c.name.toLowerCase().includes("india"));
+      setSelectedCountryId(india ? india.id : countries[0].id);
+    }
+  }, [countries, selectedCountryId]);
+
+  // 2. Fetch States for Country
+  const { data: states = [], isLoading: isLoadingStates } = useStatesQuery(selectedCountryId);
+
+  // Set state ONLY if detected from location or initialData
+  useEffect(() => {
+    if (states.length > 0) {
+      const targetStateName = (detectedLocation?.state || initialData?.stateName || "").trim().toLowerCase();
+      if (!targetStateName) return;
+
+      // 1. Exact name match
+      let matched = states.find((s) => s.name.toLowerCase() === targetStateName);
+      // 2. Exact code match
+      if (!matched) {
+        matched = states.find((s) => s.code && s.code.toLowerCase() === targetStateName);
+      }
+      // 3. Name contains targetStateName
+      if (!matched) {
+        matched = states.find((s) => s.name.toLowerCase().includes(targetStateName));
+      }
+
+      if (matched && (!selectedStateId || !states.some((s) => s.id === selectedStateId))) {
+        setSelectedStateId(matched.id);
+      }
+    }
+  }, [states, selectedStateId, detectedLocation?.state, initialData?.stateName]);
+
+  // 3. Fetch Cities for State
+  const { data: cities = [], isLoading: isLoadingCities } = useCitiesQuery(selectedStateId);
+
+  // Set city ONLY if detected from location, initialData, or formattedAddress
+  useEffect(() => {
+    if (cities.length > 0) {
+      let targetCityName = (detectedLocation?.city || initialData?.city || "").trim().toLowerCase();
+
+      // Scan formattedAddress for city name if empty
+      if (!targetCityName && detectedLocation?.formattedAddress) {
+        const addrLower = detectedLocation.formattedAddress.toLowerCase();
+        const found = cities.find((c) => addrLower.includes(c.name.toLowerCase()));
+        if (found) targetCityName = found.name.toLowerCase();
+      }
+
+      if (!targetCityName) return;
+
+      const matched =
+        cities.find((c) => c.name.toLowerCase() === targetCityName) ||
+        cities.find(
+          (c) =>
+            c.name.toLowerCase().includes(targetCityName) ||
+            targetCityName.includes(c.name.toLowerCase())
+        );
+
+      if (matched && (!selectedCityId || !cities.some((c) => c.id === selectedCityId))) {
+        setSelectedCityId(matched.id);
+      }
+    }
+  }, [cities, selectedCityId, detectedLocation?.city, detectedLocation?.formattedAddress, initialData?.city]);
+
+  // 4. Fetch Pincodes for City
+  const { data: pincodes = [], isLoading: isLoadingPincodes } = usePincodesQuery(selectedCityId);
+
+  // Set Pincode ONLY if detected from location or initialData
+  useEffect(() => {
+    if (pincodes.length > 0) {
+      let targetPincode = (detectedLocation?.pincode || initialData?.pincode || "").trim();
+      if (!targetPincode && detectedLocation?.formattedAddress) {
+        const match = detectedLocation.formattedAddress.match(/\b([1-9][0-9]{5})\b/);
+        if (match) targetPincode = match[1];
+      }
+      if (!targetPincode) return;
+
+      const matchedPin = pincodes.find((p) => p.code === targetPincode);
+      if (matchedPin && (!selectedPincodeId || !pincodes.some((p) => p.id === selectedPincodeId))) {
+        setSelectedPincodeId(matchedPin.id);
+      }
+    }
+  }, [pincodes, detectedLocation?.pincode, detectedLocation?.formattedAddress, initialData?.pincode, selectedPincodeId]);
+
+  // 5. Fetch all Areas for City
+  const { data: areas = [], isLoading: isLoadingAreas } = useAreasQuery({
+    city_id: selectedCityId || undefined,
+  });
+
+  // Set Area ONLY if detected from location or initialData
+  useEffect(() => {
+    if (areas.length > 0) {
+      const targetArea = (detectedLocation?.area || detectedLocation?.society || initialData?.area || "").trim().toLowerCase();
+      if (!targetArea) return;
+
+      const matchedArea =
+        areas.find((a) => a.name.toLowerCase() === targetArea) ||
+        areas.find(
+          (a) =>
+            a.name.toLowerCase().includes(targetArea) ||
+            targetArea.includes(a.name.toLowerCase())
+        );
+
+      if (matchedArea && (!selectedAreaId || !areas.some((a) => a.id === selectedAreaId))) {
+        setSelectedAreaId(matchedArea.id);
+        setCustomAreaName(matchedArea.name);
+        if (matchedArea.pincode_id && !selectedPincodeId) {
+          setSelectedPincodeId(matchedArea.pincode_id);
+        }
+      }
+    }
+  }, [areas, detectedLocation?.area, detectedLocation?.society, initialData?.area, selectedPincodeId, selectedAreaId]);
+
+  // Selected State, City, Pincode, Area labels
+  const selectedState = useMemo(() => states.find((s) => s.id === selectedStateId), [states, selectedStateId]);
+  const selectedCity = useMemo(() => cities.find((c) => c.id === selectedCityId), [cities, selectedCityId]);
+  const selectedPincode = useMemo(() => pincodes.find((p) => p.id === selectedPincodeId), [pincodes, selectedPincodeId]);
+  const selectedArea = useMemo(() => areas.find((a) => a.id === selectedAreaId), [areas, selectedAreaId]);
+
+  // Auto-resolve store whenever area changes
+  useEffect(() => {
+    if (selectedAreaId) {
+      locationService.resolveStoreByArea(selectedAreaId).then((storeRes) => {
+        if (storeRes) {
+          setResolvedStoreInfo({
+            storeName: storeRes.storeName,
+            deliveryEtaMinutes: storeRes.deliveryEtaMinutes,
+          });
+        }
+      });
+    }
+  }, [selectedAreaId]);
+
+  // Initialize or update form state on open
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (detectedLocation) {
+      const locArea = [detectedLocation.society || detectedLocation.area, detectedLocation.city]
+        .filter(Boolean)
+        .join(", ");
+      setCustomAreaName(detectedLocation.society || detectedLocation.area || "");
+      setHouseNo(detectedLocation.houseNo || "");
+      setFloor("");
+      setLandmark(detectedLocation.landmark || "");
+      setSearchMapQuery(detectedLocation.formattedAddress || locArea || "");
+      setName(user?.name || initialData?.receiverName || "Customer");
+      setPhone(user?.phone || initialData?.receiverPhone || "");
+      setAddressType((initialData?.type as any) || "home");
+
+      if (detectedLocation.coordinates) {
+        setCurrentCoords(detectedLocation.coordinates);
+      }
+
+      if (detectedLocation.darkStoreName) {
+        setResolvedStoreInfo({
+          storeName: detectedLocation.darkStoreName,
+          deliveryEtaMinutes: detectedLocation.deliveryEtaMinutes || 8,
+        });
+      }
+    } else if (initialData) {
       setAddressType((initialData.type as any) || "home");
-      setHouseNo(initialData.addressLine.split(",")[0] || "");
-      setArea(initialData.area ? `${initialData.area}, ${initialData.city || "Ahmedabad"}` : "Bapunagar, Ahmedabad");
+      setHouseNo(initialData.addressLine?.split(",")[0] || "");
+      setCustomAreaName(initialData.area || "");
       setLandmark(initialData.landmark || "");
-      setName(initialData.receiverName || "Vinit");
-      setPhone(initialData.receiverPhone || "7567337686");
+      setName(initialData.receiverName || user?.name || "Customer");
+      setPhone(initialData.receiverPhone || user?.phone || "");
+      setSearchMapQuery(initialData.addressLine || initialData.area || "");
+      if (initialData.coordinates) {
+        setCurrentCoords(initialData.coordinates);
+      }
+      if (initialData.stateId) setSelectedStateId(initialData.stateId);
+      if (initialData.cityId) setSelectedCityId(initialData.cityId);
+      if (initialData.pincodeId) setSelectedPincodeId(initialData.pincodeId);
+      if (initialData.areaId) setSelectedAreaId(initialData.areaId);
     } else {
       setAddressType("home");
-      setHouseNo("8 Kahan Park Socity");
+      setHouseNo("");
       setFloor("");
-      setArea("Bapunagar, Ahmedabad");
-      setLandmark("Bapunagar near Chandraprashad Desai hall");
-      setName("Vinit");
-      setPhone("7567337686");
+      setCustomAreaName("");
+      setLandmark("");
+      setName(user?.name || "Customer");
+      setPhone(user?.phone || "");
     }
-  }, [initialData, isOpen]);
+  }, [detectedLocation, initialData, isOpen, user]);
+
+  // Handle Interactive Pin on Map
+  const handleMapPinSelect = useCallback(
+    (result: MapLocationResult) => {
+      setCurrentCoords(result.coordinates);
+      setSearchMapQuery(result.formattedAddress);
+
+      if (result.society || result.area) {
+        setCustomAreaName(result.society || result.area || "");
+      }
+
+      // Auto-match City if result.city is available
+      if (result.city && cities.length > 0) {
+        const matchedCity = cities.find((c) =>
+          c.name.toLowerCase().includes(result.city!.toLowerCase())
+        );
+        if (matchedCity) {
+          setSelectedCityId(matchedCity.id);
+        }
+      }
+
+      // Auto-match Pincode if result.pincode is available
+      if (result.pincode && pincodes.length > 0) {
+        const matchedPin = pincodes.find((p) => p.code === result.pincode);
+        if (matchedPin) {
+          setSelectedPincodeId(matchedPin.id);
+        }
+      }
+
+      // Auto-match Area if result.area is available
+      if (result.area && areas.length > 0) {
+        const matchedArea = areas.find((a) =>
+          a.name.toLowerCase().includes(result.area!.toLowerCase())
+        );
+        if (matchedArea) {
+          setSelectedAreaId(matchedArea.id);
+        }
+      }
+
+      if (result.darkStoreName) {
+        setResolvedStoreInfo({
+          storeName: result.darkStoreName,
+          deliveryEtaMinutes: result.deliveryEtaMinutes || 8,
+        });
+      }
+
+      toast.success(`📍 Pinned: ${result.society || result.area || "Location"}, ${result.pincode || ""}`);
+    },
+    [cities, pincodes, areas]
+  );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,11 +354,18 @@ export function AddressModal({
       return;
     }
 
+    const effectiveAreaName = selectedArea?.name || customAreaName.trim() || "";
+    const effectiveCityName = selectedCity?.name || detectedLocation?.city || "";
+    const effectivePincode = selectedPincode?.code || detectedLocation?.pincode || "";
+    const effectiveStateName = selectedState?.name || detectedLocation?.state || "";
+
     const fullAddress = [
       houseNo.trim(),
       floor.trim() ? `${floor.trim()} Floor` : "",
       landmark.trim(),
-      area.trim(),
+      effectiveAreaName,
+      effectiveCityName,
+      effectivePincode,
     ]
       .filter(Boolean)
       .join(", ");
@@ -95,41 +382,54 @@ export function AddressModal({
           ? "Hotel"
           : name.trim() || "Other",
       addressLine: fullAddress,
-      area: area.split(",")[0]?.trim() || "Bapunagar",
-      city: area.split(",")[1]?.trim() || "Ahmedabad",
-      pincode: initialData?.pincode || "380024",
+      houseNo: houseNo.trim(),
+      floor: floor.trim(),
+      area: effectiveAreaName,
+      city: effectiveCityName,
+      pincode: effectivePincode,
+      stateName: effectiveStateName,
+      countryId: selectedCountryId || undefined,
+      stateId: selectedStateId || undefined,
+      cityId: selectedCityId || undefined,
+      pincodeId: selectedPincodeId || undefined,
+      areaId: selectedAreaId || undefined,
+      coordinates: currentCoords,
       landmark: landmark.trim(),
       receiverName: name.trim(),
       receiverPhone: phone.trim(),
       isDefault: initialData?.isDefault ?? true,
-      floor: floor.trim(),
     });
-
-    onClose();
   };
+
+  const displayStoreName = resolvedStoreInfo.storeName || detectedLocation?.darkStoreName || "";
+  const displayEta = resolvedStoreInfo.deliveryEtaMinutes || detectedLocation?.deliveryEtaMinutes || 0;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl p-0 overflow-hidden rounded-2xl border border-gray-200 bg-white dark:bg-[#181818] shadow-2xl">
-        <div className="grid grid-cols-1 md:grid-cols-2 min-h-[540px]">
-          {/* Left Column: Interactive Map Preview Matching Screenshot 2 */}
-          <div className="relative bg-[#e9ecef] dark:bg-[#202020] flex flex-col justify-between p-4 overflow-hidden select-none border-r border-gray-200 dark:border-gray-800">
-            {/* Top Search Input */}
-            <div className="relative z-10 w-full">
-              <div className="flex items-center gap-2 bg-white dark:bg-[#282828] rounded-xl px-3 py-2.5 shadow-md border border-gray-200/80 dark:border-gray-700">
+      {/* Set hideCloseButton={true} to eliminate the duplicate close button */}
+      <DialogContent
+        hideCloseButton={true}
+        className="max-w-4xl p-0 overflow-hidden rounded-3xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-[#181818] shadow-2xl"
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 min-h-[600px]">
+          {/* Left Column: Interactive Real Map Section with Pin Drop & Live Location Feedback */}
+          <div className="relative bg-[#e9ecef] dark:bg-[#202020] flex flex-col justify-between p-4 overflow-hidden border-b md:border-b-0 md:border-r border-neutral-200 dark:border-neutral-800">
+            {/* Top Search & Real-time Pin Helper */}
+            <div className="relative z-10 w-full mb-3">
+              <div className="flex items-center gap-2 bg-white/95 dark:bg-[#282828]/95 backdrop-blur-md rounded-2xl px-3.5 py-2.5 shadow-md border border-neutral-200/90 dark:border-neutral-700">
                 <Search className="h-4 w-4 text-[#0c831f] shrink-0" />
                 <input
                   type="text"
                   value={searchMapQuery}
                   onChange={(e) => setSearchMapQuery(e.target.value)}
-                  placeholder="Search society, building, area..."
-                  className="w-full text-xs font-medium text-gray-800 dark:text-gray-100 bg-transparent outline-none truncate"
+                  placeholder="Pin or search locality on map..."
+                  className="w-full text-xs font-semibold text-neutral-800 dark:text-neutral-100 bg-transparent outline-none truncate"
                 />
                 {searchMapQuery && (
                   <button
                     type="button"
                     onClick={() => setSearchMapQuery("")}
-                    className="text-gray-400 hover:text-gray-600 cursor-pointer"
+                    className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 cursor-pointer"
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>
@@ -137,122 +437,64 @@ export function AddressModal({
               </div>
             </div>
 
-            {/* Stylized Realistic Map Illustration with Center Marker */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              {/* SVG Vector Map Canvas mimicking Google/Apple Maps in screenshot */}
-              <svg
-                viewBox="0 0 600 600"
-                className="w-full h-full object-cover opacity-85"
-                preserveAspectRatio="xMidYMid slice"
-              >
-                <rect width="600" height="600" fill="#E8EDF2" />
-                {/* Road networks */}
-                <path
-                  d="M0,150 Q200,120 400,200 T600,240"
-                  stroke="#FFFFFF"
-                  strokeWidth="28"
-                  fill="none"
-                />
-                <path
-                  d="M100,0 L180,600"
-                  stroke="#FFFFFF"
-                  strokeWidth="26"
-                  fill="none"
-                />
-                <path
-                  d="M320,0 L280,600"
-                  stroke="#FFFFFF"
-                  strokeWidth="32"
-                  fill="none"
-                />
-                <path
-                  d="M480,0 L520,600"
-                  stroke="#FFFFFF"
-                  strokeWidth="24"
-                  fill="none"
-                />
-                <path
-                  d="M50,380 L550,420"
-                  stroke="#FFFFFF"
-                  strokeWidth="24"
-                  fill="none"
-                />
-                {/* City Blocks */}
-                <rect x="130" y="240" width="130" height="120" rx="12" fill="#DDE4EC" />
-                <rect x="330" y="260" width="120" height="110" rx="12" fill="#DDE4EC" />
-                <rect x="130" y="60" width="140" height="70" rx="8" fill="#DDE4EC" />
-                <rect x="340" y="80" width="110" height="90" rx="8" fill="#DDE4EC" />
-                {/* Secondary pathways */}
-                <path d="M140,300 L250,300" stroke="#CBD5E1" strokeWidth="6" strokeDasharray="4 4" />
-                <path d="M340,320 L440,320" stroke="#CBD5E1" strokeWidth="6" strokeDasharray="4 4" />
-              </svg>
-
-              {/* Pinpoint Location Marker */}
-              <div className="relative z-10 flex flex-col items-center animate-bounce -mt-6">
-                <div className="relative flex items-center justify-center">
-                  <div className="h-9 w-9 rounded-full bg-rose-500/20 animate-ping absolute" />
-                  <div className="h-8 w-8 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-lg border-2 border-white">
-                    <MapPin className="h-5 w-5 fill-white text-rose-600" />
-                  </div>
-                </div>
-                <div className="h-2 w-2 rounded-full bg-black/40 blur-[1px] mt-0.5" />
-              </div>
-            </div>
-
-            {/* Go to Current Location Button */}
-            <div className="relative z-10 pt-44 pb-2">
-              <button
-                type="button"
-                onClick={() => {
-                  toast.success("GPS Location updated: Bapunagar, Ahmedabad");
-                  setArea("Bapunagar, Ahmedabad");
-                }}
-                className="inline-flex items-center gap-2 bg-white dark:bg-[#282828] text-gray-800 dark:text-gray-100 px-3 py-2 rounded-xl text-xs font-semibold shadow-md border border-gray-200 dark:border-gray-700 hover:bg-gray-50 cursor-pointer"
-              >
-                <Navigation className="h-3.5 w-3.5 text-[#0c831f] fill-[#0c831f]/20" />
-                <span>Go to current location</span>
-              </button>
-            </div>
-
-            {/* Bottom Delivering Order To Card */}
-            <div className="relative z-10 bg-white dark:bg-[#282828] rounded-2xl p-3.5 shadow-lg border border-gray-200 dark:border-gray-700 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 shrink-0">
-                <MapPin className="h-5 w-5" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400">
-                  Delivering your order to
-                </p>
-                <p className="text-sm font-extrabold text-gray-900 dark:text-white truncate">
-                  {area.split(",")[0] || "Bapunagar"}
-                </p>
-                <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
-                  {area.split(",")[1] || "Ahmedabad"}
-                </p>
-              </div>
+            {/* Real Interactive Map Component with Marker Drag & Click to Pin */}
+            <div className="flex-1 w-full relative min-h-[340px] rounded-2xl overflow-hidden shadow-inner border border-neutral-200 dark:border-neutral-700">
+              <InteractiveMap
+                initialCoordinates={currentCoords}
+                onLocationSelect={handleMapPinSelect}
+                className="w-full h-full"
+              />
             </div>
           </div>
 
-          {/* Right Column: Enter Complete Address Form Matching Screenshot 2 */}
-          <div className="p-6 sm:p-7 flex flex-col justify-between bg-white dark:bg-[#181818]">
+          {/* Right Column: Enter Complete Address Form with Dynamic State / City / Pincode / Area */}
+          <div className="p-5 sm:p-6 flex flex-col justify-between bg-white dark:bg-[#181818] overflow-y-auto max-h-[85vh]">
             <div className="space-y-4">
-              <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
-                <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
-                  Enter complete address
-                </h2>
+              {/* Header with ONLY ONE clean, modern close button */}
+              <div className="flex items-center justify-between border-b border-neutral-100 dark:border-neutral-800 pb-3">
+                <div>
+                  <h2 className="text-base sm:text-lg font-black text-neutral-900 dark:text-white tracking-tight">
+                    Enter complete address
+                  </h2>
+                  <p className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
+                    Location state & delivery area auto-synced with nearest store
+                  </p>
+                </div>
+                {/* Single, perfectly positioned Close button */}
                 <button
                   type="button"
                   onClick={onClose}
-                  className="rounded-full p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
+                  aria-label="Close address modal"
+                  className="h-8 w-8 rounded-full flex items-center justify-center text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
 
+              {/* Verified Dark Store Fulfillment Banner */}
+              <div className="flex items-center justify-between px-3.5 py-2 rounded-2xl bg-gradient-to-r from-emerald-50 to-emerald-100/60 dark:from-emerald-950/40 dark:to-emerald-900/20 border border-emerald-200/80 dark:border-emerald-800/60">
+                <div className="flex items-center gap-2">
+                  <div className="h-6 w-6 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0">
+                    <Zap className="h-3.5 w-3.5 fill-white" />
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-bold text-emerald-900 dark:text-emerald-100">
+                      {displayStoreName}
+                    </p>
+                    <p className="text-[10px] text-emerald-700 dark:text-emerald-300 font-medium">
+                      Estimated delivery: ~{displayEta} mins
+                    </p>
+                  </div>
+                </div>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#0c831f] text-white">
+                  Active
+                </span>
+              </div>
+
               <form onSubmit={handleSubmit} className="space-y-3.5">
                 {/* Save Address As Category Pills */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">
+                  <label className="text-[11px] font-bold text-neutral-700 dark:text-neutral-300">
                     Save address as *
                   </label>
                   <div className="flex flex-wrap items-center gap-2">
@@ -269,13 +511,13 @@ export function AddressModal({
                           key={item.id}
                           type="button"
                           onClick={() => setAddressType(item.id as any)}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                             isSelected
-                              ? "border-[#0c831f] bg-[#0c831f]/10 text-[#0c831f] font-bold"
-                              : "border-gray-300 dark:border-gray-700 bg-white dark:bg-[#202020] text-gray-700 dark:text-gray-300 hover:border-gray-400"
+                              ? "bg-[#0c831f] border-[#0c831f] text-white shadow-sm shadow-emerald-500/20"
+                              : "border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/60 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800"
                           }`}
                         >
-                          <Icon className="h-3.5 w-3.5 text-amber-500" />
+                          <Icon className="h-3.5 w-3.5" />
                           <span>{item.label}</span>
                         </button>
                       );
@@ -283,101 +525,201 @@ export function AddressModal({
                   </div>
                 </div>
 
-                {/* Flat / House No */}
+                {/* State & City Cascading Row */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-neutral-700 dark:text-neutral-300 flex items-center justify-between">
+                      <span>State *</span>
+                      {isLoadingStates && <Loader2 className="h-3 w-3 animate-spin text-[#0c831f]" />}
+                    </label>
+                    <select
+                      value={selectedStateId}
+                      onChange={(e) => {
+                        setSelectedStateId(e.target.value);
+                        setSelectedCityId("");
+                        setSelectedPincodeId("");
+                        setSelectedAreaId("");
+                      }}
+                      className="w-full h-9 text-xs font-semibold rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-[#202020] px-2.5 text-neutral-800 dark:text-neutral-100 outline-none focus:border-[#0c831f] focus:ring-1 focus:ring-[#0c831f] transition-all cursor-pointer"
+                    >
+                      <option value="">Select State</option>
+                      {states.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} {s.code ? `(${s.code})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-neutral-700 dark:text-neutral-300 flex items-center justify-between">
+                      <span>City *</span>
+                      {isLoadingCities && <Loader2 className="h-3 w-3 animate-spin text-[#0c831f]" />}
+                    </label>
+                    <select
+                      value={selectedCityId}
+                      onChange={(e) => {
+                        setSelectedCityId(e.target.value);
+                        setSelectedPincodeId("");
+                        setSelectedAreaId("");
+                      }}
+                      className="w-full h-9 text-xs font-semibold rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-[#202020] px-2.5 text-neutral-800 dark:text-neutral-100 outline-none focus:border-[#0c831f] focus:ring-1 focus:ring-[#0c831f] transition-all cursor-pointer"
+                    >
+                      <option value="">Select City</option>
+                      {cities.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Pincode & Area Cascading Row (Auto-fill with backend list) */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-neutral-700 dark:text-neutral-300 flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <Hash className="h-3 w-3 text-[#0c831f]" /> Pincode *
+                      </span>
+                      {isLoadingPincodes && <Loader2 className="h-3 w-3 animate-spin text-[#0c831f]" />}
+                    </label>
+                    <select
+                      value={selectedPincodeId}
+                      onChange={(e) => {
+                        const pinId = e.target.value;
+                        setSelectedPincodeId(pinId);
+                        const matchedArea = areas.find((a) => a.pincode_id === pinId);
+                        if (matchedArea) {
+                          setSelectedAreaId(matchedArea.id);
+                          setCustomAreaName(matchedArea.name);
+                        }
+                      }}
+                      className="w-full h-9 text-xs font-bold rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-[#202020] px-2.5 text-neutral-800 dark:text-neutral-100 outline-none focus:border-[#0c831f] focus:ring-1 focus:ring-[#0c831f] transition-all cursor-pointer"
+                    >
+                      <option value="">Select Pincode</option>
+                      {pincodes.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.code}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-neutral-700 dark:text-neutral-300 flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <MapPin className="h-3 w-3 text-[#0c831f]" /> Service Area *
+                      </span>
+                      {isLoadingAreas && <Loader2 className="h-3 w-3 animate-spin text-[#0c831f]" />}
+                    </label>
+                    <select
+                      value={selectedAreaId}
+                      onChange={(e) => {
+                        const areaId = e.target.value;
+                        setSelectedAreaId(areaId);
+                        const matched = areas.find((a) => a.id === areaId);
+                        if (matched) {
+                          setCustomAreaName(matched.name);
+                          if (matched.pincode_id) {
+                            setSelectedPincodeId(matched.pincode_id);
+                          }
+                        }
+                      }}
+                      className="w-full h-9 text-xs font-bold rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-[#202020] px-2.5 text-neutral-800 dark:text-neutral-100 outline-none focus:border-[#0c831f] focus:ring-1 focus:ring-[#0c831f] transition-all cursor-pointer"
+                    >
+                      <option value="">Select Service Area</option>
+                      {areas.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Flat / House No / Building Name */}
                 <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-gray-600 dark:text-gray-300">
+                  <label className="text-[11px] font-bold text-neutral-700 dark:text-neutral-300">
                     Flat / House no / Building name *
                   </label>
                   <Input
                     value={houseNo}
                     onChange={(e) => setHouseNo(e.target.value)}
-                    placeholder="8 Kahan Park Socity"
-                    className="h-9 text-xs rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-[#202020]"
+                    placeholder="e.g. Flat 302, Green Valley Apartments"
+                    className="h-9 text-xs font-medium rounded-xl border-neutral-300 dark:border-neutral-700 bg-white dark:bg-[#202020]"
                     required
                   />
                 </div>
 
-                {/* Floor Optional */}
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-gray-600 dark:text-gray-300">
-                    Floor (optional)
-                  </label>
-                  <Input
-                    value={floor}
-                    onChange={(e) => setFloor(e.target.value)}
-                    placeholder="e.g. 2nd Floor"
-                    className="h-9 text-xs rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-[#202020]"
-                  />
+                {/* Floor Optional & Landmark */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-neutral-700 dark:text-neutral-300">
+                      Floor (optional)
+                    </label>
+                    <Input
+                      value={floor}
+                      onChange={(e) => setFloor(e.target.value)}
+                      placeholder="e.g. 3rd Floor"
+                      className="h-9 text-xs rounded-xl border-neutral-300 dark:border-neutral-700 bg-white dark:bg-[#202020]"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-neutral-700 dark:text-neutral-300">
+                      Landmark (optional)
+                    </label>
+                    <Input
+                      value={landmark}
+                      onChange={(e) => setLandmark(e.target.value)}
+                      placeholder="e.g. Near Star Bazaar"
+                      className="h-9 text-xs rounded-xl border-neutral-300 dark:border-neutral-700 bg-white dark:bg-[#202020]"
+                    />
+                  </div>
                 </div>
 
-                {/* Area / Sector / Locality */}
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-gray-600 dark:text-gray-300">
-                    Area / Sector / Locality *
-                  </label>
-                  <Input
-                    value={area}
-                    onChange={(e) => setArea(e.target.value)}
-                    placeholder="Bapunagar, Ahmedabad"
-                    className="h-9 text-xs rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-[#202020]"
-                    required
-                  />
-                </div>
-
-                {/* Nearby Landmark */}
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-gray-600 dark:text-gray-300">
-                    Nearby landmark (optional)
-                  </label>
-                  <Input
-                    value={landmark}
-                    onChange={(e) => setLandmark(e.target.value)}
-                    placeholder="Bapunagar near Chandraprashad Desai hall"
-                    className="h-9 text-xs rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-[#202020]"
-                  />
-                </div>
-
-                {/* Section Separator */}
-                <div className="pt-2">
-                  <p className="text-[11px] font-semibold text-gray-500 dark:text-gray-400">
-                    Enter your details for seamless delivery experience
-                  </p>
-                </div>
-
-                {/* Name */}
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-gray-600 dark:text-gray-300">
-                    Your name *
-                  </label>
-                  <Input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Vinit"
-                    className="h-9 text-xs rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-[#202020]"
-                    required
-                  />
-                </div>
-
-                {/* Phone */}
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-gray-600 dark:text-gray-300">
-                    Your phone number (optional)
-                  </label>
-                  <Input
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="7567337686"
-                    className="h-9 text-xs rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-[#202020]"
-                  />
+                {/* Recipient Details: Name & Phone */}
+                <div className="grid grid-cols-2 gap-2.5 pt-0.5">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-neutral-700 dark:text-neutral-300">
+                      Receiver Name *
+                    </label>
+                    <Input
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="e.g. Yash Patel"
+                      className="h-9 text-xs font-medium rounded-xl border-neutral-300 dark:border-neutral-700 bg-white dark:bg-[#202020]"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-neutral-700 dark:text-neutral-300">
+                      Phone Number
+                    </label>
+                    <Input
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="e.g. 9876543210"
+                      className="h-9 text-xs font-medium rounded-xl border-neutral-300 dark:border-neutral-700 bg-white dark:bg-[#202020]"
+                    />
+                  </div>
                 </div>
 
                 {/* Big Solid Green Save Address Button */}
                 <div className="pt-2">
                   <Button
                     type="submit"
-                    className="w-full h-11 bg-[#0c831f] hover:bg-[#0a6f1a] text-white font-bold text-sm rounded-xl cursor-pointer shadow-md transition-all active:scale-[0.99]"
+                    disabled={isSaving}
+                    className="w-full h-11 bg-gradient-to-r from-[#0c831f] to-[#0a6f1a] hover:from-[#0a6f1a] hover:to-[#085a15] text-white font-black text-xs sm:text-sm rounded-xl cursor-pointer shadow-lg shadow-emerald-600/25 transition-all active:scale-[0.99] disabled:opacity-70 flex items-center justify-center gap-2"
                   >
-                    Save Address
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Saving Address...</span>
+                      </>
+                    ) : (
+                      <span>Save Address & Proceed</span>
+                    )}
                   </Button>
                 </div>
               </form>

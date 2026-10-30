@@ -188,15 +188,21 @@ function extractCity(addr: any): string {
     addr.town,
     addr.municipality,
     addr.village,
+    addr.city_district,
+    addr.state_district,
+    addr.district,
+    addr.county,
   ];
 
   for (const candidate of cityCandidates) {
     if (isCleanString(candidate)) {
-      return candidate.trim();
+      const clean = candidate
+        .replace(/\b(Taluka|District|Tehsil)\b/gi, "")
+        .trim();
+      if (clean) return clean;
     }
   }
 
-  // Return empty string if no valid city/town/village is available rather than an incorrect taluka/district
   return "";
 }
 

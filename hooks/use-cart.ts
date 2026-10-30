@@ -379,7 +379,34 @@ export function useCart() {
         maxStock: stock,
         customAttributes,
       };
-      setCartItems((prev) => [...prev, newItem]);
+      setCartItems((prev) => {
+        const existingIndex = prev.findIndex((item) => {
+          if (hasVariant) {
+            return (
+              item.variantId === lineItemId ||
+              item.id === lineItemId ||
+              (item.cartItemId && item.cartItemId === lineItemId)
+            );
+          }
+          return (
+            (!item.variantId || item.variantId === product.id) &&
+            (item.productId === product.id || item.id === product.id)
+          );
+        });
+
+        if (existingIndex >= 0) {
+          const updated = [...prev];
+          const existingItem = updated[existingIndex];
+          const mergedQty = existingItem.quantity + quantity;
+          updated[existingIndex] = {
+            ...existingItem,
+            quantity: existingItem.maxStock ? Math.min(mergedQty, existingItem.maxStock) : mergedQty,
+          };
+          return updated;
+        }
+
+        return [...prev, newItem];
+      });
 
       if (!isAuthenticated || !lineItemId) return;
 
@@ -519,7 +546,9 @@ export function useCart() {
         const exists = prev.find(
           (it) =>
             it.id === targetItem.id ||
-            (it.variantId && targetItem.variantId && it.variantId === targetItem.variantId)
+            (it.cartItemId && targetItem.cartItemId && it.cartItemId === targetItem.cartItemId) ||
+            (it.variantId && targetItem.variantId && it.variantId === targetItem.variantId) ||
+            (!it.variantId && !targetItem.variantId && it.productId === targetItem.productId)
         );
         if (exists) {
           return prev.map((it) =>

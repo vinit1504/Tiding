@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAtom, useSetAtom } from "jotai";
 import { userProfileAtom, authSessionAtom, isAuthDrawerOpenAtom } from "@/stores";
+import { getStoredAccessToken } from "@/lib/auth/token-storage";
 
 export function useAuth() {
   const [mounted, setMounted] = useState(false);
@@ -14,12 +15,14 @@ export function useAuth() {
     setMounted(true);
   }, []);
 
+  const storedToken = mounted ? getStoredAccessToken() : null;
+  const hasValidToken = (!!session.token || !!storedToken) && session.token !== "token_vinit_default" && storedToken !== "token_vinit_default";
+
   const isAuthenticated =
     mounted &&
-    !!user &&
-    session.isAuthenticated &&
+    (session.isAuthenticated || hasValidToken) &&
     session.token !== "token_vinit_default" &&
-    user?.id !== "usr-vinit";
+    storedToken !== "token_vinit_default";
 
   const openLogin = useCallback(
     (redirectUrl?: string) => {

@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAtom, useAtomValue } from "jotai";
-import { ChevronDown, MapPin, Search, ShoppingCart, User, X } from "lucide-react";
+import { ChevronDown, MapPin, Search, ShoppingCart, User, X, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -28,12 +28,14 @@ import {
   liveSearchQueryAtom,
 } from "@/stores";
 import { SITE_CONFIG } from "@/lib/constants/site-config";
+import { getStoredAccessToken } from "@/lib/auth/token-storage";
 import {
   formatCurrency,
   getUserDisplayInitials,
   getUserFirstName,
 } from "@/lib/utils";
 import { useCustomerAddressesQuery } from "@/queries";
+import { useWishlist } from "@/hooks/use-wishlist";
 
 const SEARCH_PLACEHOLDERS = [
   "Search 'farm fresh tomatoes'...",
@@ -56,6 +58,7 @@ export function AppHeader() {
   const cartTotal = useAtomValue(cartItemTotalAtom);
   const [user, setUser] = useAtom(userProfileAtom);
   const [session, setSession] = useAtom(authSessionAtom);
+  const { wishlistCount } = useWishlist();
 
   const [searchTerm, setSearchTerm] = useAtom(liveSearchQueryAtom);
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
@@ -67,13 +70,16 @@ export function AppHeader() {
 
   const displayCartCount = mounted ? cartCount : 0;
   const displayCartTotal = mounted ? cartTotal : 0;
+  const displayWishlistCount = mounted ? wishlistCount : 0;
+
+  const storedToken = mounted ? getStoredAccessToken() : null;
+  const hasValidToken = (!!session.token || !!storedToken) && session.token !== "token_vinit_default" && storedToken !== "token_vinit_default";
 
   const isAuthenticated =
     mounted &&
-    !!user &&
-    session.isAuthenticated &&
+    (session.isAuthenticated || hasValidToken) &&
     session.token !== "token_vinit_default" &&
-    user?.id !== "usr-vinit";
+    storedToken !== "token_vinit_default";
 
   // Fetch saved customer addresses when authenticated
   const { data: savedAddresses = [] } = useCustomerAddressesQuery();
@@ -254,10 +260,12 @@ export function AppHeader() {
                   <div className="flex h-7 w-7 sm:h-7.5 sm:w-7.5 items-center justify-center rounded-full bg-gradient-to-br from-[#18A818] to-[#0c831f] text-white font-black text-xs shadow-xs tracking-wider ring-2 ring-[#18A818]/25">
                     {user?.email
                       ? user.email.trim().charAt(0).toUpperCase()
-                      : getUserDisplayInitials(user)}
+                      : user?.name
+                      ? user.name.trim().charAt(0).toUpperCase()
+                      : "U"}
                   </div>
                   <span className="hidden sm:inline font-bold text-xs text-[var(--text-primary)] max-w-[95px] truncate">
-                    {getUserFirstName(user)}
+                    {user ? getUserFirstName(user) : "My Account"}
                   </span>
                   <ChevronDown className="h-3.5 w-3.5 text-[var(--text-muted)] transition-transform duration-200 group-data-[state=open]:rotate-180" />
                 </button>
@@ -269,10 +277,10 @@ export function AppHeader() {
                 {/* User Header Summary */}
                 <div className="px-3 py-2.5 border-b border-gray-100">
                   <p className="text-xs font-extrabold text-gray-900 truncate">
-                    {user?.name || "Vinit"}
+                    {user?.name || "My Account"}
                   </p>
                   <p className="text-[11px] text-gray-500 truncate mt-0.5 font-medium">
-                    {user?.phone || user?.email || "+91 75673 37686"}
+                    {user?.phone || user?.email || "Logged in"}
                   </p>
                 </div>
 
@@ -290,6 +298,18 @@ export function AppHeader() {
                     className="w-full px-3 py-2 text-xs font-semibold text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
                   >
                     My Orders
+                  </DropdownMenuItem>
+
+                  <DropdownMenuItem
+                    onClick={() => router.push("/wishlist")}
+                    className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
+                  >
+                    <span>My Wishlist</span>
+                    {displayWishlistCount > 0 && (
+                      <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
+                        {displayWishlistCount}
+                      </span>
+                    )}
                   </DropdownMenuItem>
 
                   <DropdownMenuItem
@@ -346,6 +366,28 @@ export function AppHeader() {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+
+          {/* Wishlist Header Target Button */}
+          <button
+            id="header-wishlist-target"
+            type="button"
+            onClick={() => router.push("/wishlist")}
+            aria-label={`Wishlist (${displayWishlistCount} items)`}
+            className="relative h-10 sm:h-11 w-10 sm:w-11 flex items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface-secondary)]/60 text-[var(--text-primary)] hover:text-rose-600 hover:bg-rose-50/50 hover:border-rose-200 transition-all active:scale-95 cursor-pointer shrink-0"
+          >
+            <Heart
+              className={`h-4.5 w-4.5 transition-colors ${
+                displayWishlistCount > 0
+                  ? "fill-rose-500 text-rose-500"
+                  : "text-[var(--text-secondary)]"
+              }`}
+            />
+            {displayWishlistCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white shadow-xs">
+                {displayWishlistCount > 99 ? "99+" : displayWishlistCount}
+              </span>
+            )}
+          </button>
 
           {/* Prominent Cart Pill Button - Always displayed for all users */}
           <Button

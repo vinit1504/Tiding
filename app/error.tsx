@@ -13,7 +13,7 @@ export default function ErrorBoundary({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("Global Error Boundary caught an error:", error);
+    console.warn("Global Error Boundary caught an error:", error?.message || error);
   }, [error]);
 
   return (

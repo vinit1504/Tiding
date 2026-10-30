@@ -6,11 +6,77 @@ import { SITE_CONFIG } from "@/lib/constants/site-config";
 // Server-safe initial cart state to guarantee SSR and hydration parity
 export const cartItemsAtom = atom<CartItem[]>([]);
 
+/**
+ * Deduplicate cart items by unique line identity (cartItemId, id, variantId, or productId)
+ * and safely combine quantities if identical entries exist.
+ */
+export function deduplicateCartItems(items: CartItem[]): CartItem[] {
+  if (!Array.isArray(items) || items.length === 0) return [];
+
+  const result: CartItem[] = [];
+
+  for (const item of items) {
+    if (!item) continue;
+
+    const existingIndex = result.findIndex((existing) => {
+      // 1. Same cartItemId
+      if (item.cartItemId && existing.cartItemId && item.cartItemId === existing.cartItemId) {
+        return true;
+      }
+      // 2. Match variant line items
+      const itemHasVariant = !!item.variantId && item.variantId !== item.productId;
+      const existingHasVariant = !!existing.variantId && existing.variantId !== existing.productId;
+
+      if (itemHasVariant || existingHasVariant) {
+        if (item.variantId && existing.variantId && item.variantId === existing.variantId) {
+          return true;
+        }
+        if (item.id && existing.variantId && item.id === existing.variantId) {
+          return true;
+        }
+        if (existing.id && item.variantId && existing.id === item.variantId) {
+          return true;
+        }
+        if (item.id && existing.id && item.id === existing.id) {
+          return true;
+        }
+        return false;
+      }
+
+      // 3. Non-variant products: match by productId or item id
+      if (item.productId && existing.productId && item.productId === existing.productId) {
+        return true;
+      }
+      if (item.id && existing.id && item.id === existing.id) {
+        return true;
+      }
+      return false;
+    });
+
+    if (existingIndex >= 0) {
+      const existing = result[existingIndex];
+      const mergedQty = (existing.quantity || 1) + (item.quantity || 1);
+      result[existingIndex] = {
+        ...existing,
+        ...item,
+        id: existing.id || item.id,
+        cartItemId: existing.cartItemId || item.cartItemId,
+        quantity: existing.maxStock ? Math.min(mergedQty, existing.maxStock) : mergedQty,
+      };
+    } else {
+      result.push({ ...item });
+    }
+  }
+
+  return result;
+}
+
 // Persistent wrapper atom to keep localStorage in sync
 export const persistentCartAtom = atom(
   (get) => get(cartItemsAtom),
   (get, set, newCart: CartItem[] | ((prev: CartItem[]) => CartItem[])) => {
-    const updated = typeof newCart === "function" ? newCart(get(cartItemsAtom)) : newCart;
+    const rawUpdated = typeof newCart === "function" ? newCart(get(cartItemsAtom)) : newCart;
+    const updated = deduplicateCartItems(rawUpdated);
     set(cartItemsAtom, updated);
     if (typeof window !== "undefined") {
       try {
@@ -28,7 +94,8 @@ export const savedForLaterItemsAtom = atom<CartItem[]>([]);
 export const persistentSavedForLaterAtom = atom(
   (get) => get(savedForLaterItemsAtom),
   (get, set, newItems: CartItem[] | ((prev: CartItem[]) => CartItem[])) => {
-    const updated = typeof newItems === "function" ? newItems(get(savedForLaterItemsAtom)) : newItems;
+    const rawUpdated = typeof newItems === "function" ? newItems(get(savedForLaterItemsAtom)) : newItems;
+    const updated = deduplicateCartItems(rawUpdated);
     set(savedForLaterItemsAtom, updated);
     if (typeof window !== "undefined") {
       try {
