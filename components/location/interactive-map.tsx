@@ -303,7 +303,7 @@ export default function InteractiveMap({
             </div>
           </div>
 
-          {/* Quick Coordinate & Dark Store Pilli */}
+          {/* Quick Coordinate & Dark Store _Pilli */}
           <div className="mt-2 pt-2 border-t border-neutral-100 dark:border-neutral-800 flex items-center justify-between text-[10px] font-medium text-neutral-500 dark:text-neutral-400">
             <span className="truncate">
               📍 {coords.latitude.toFixed(4)}° N, {coords.longitude.toFixed(4)}°
