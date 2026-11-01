@@ -183,3 +183,4 @@ export class CheckoutService {
 }
 
 export const checkoutService = new CheckoutService();
+export { checkoutApi } from "./checkout-api";

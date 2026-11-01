@@ -227,10 +227,13 @@ export const billBreakdownAtom = atom<BillBreakdown>((get) => {
 
   return {
     itemTotal,
+    subtotal: itemTotal,
     mrpTotal,
     discountTotal,
     deliveryFee,
+    shippingTotal: deliveryFee,
     handlingFee,
+    taxTotal: server?.tax_total ? Number(server.tax_total) : 0,
     tipAmount: 0,
     couponDiscount,
     couponCode: activeCouponCode,

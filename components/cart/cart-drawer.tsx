@@ -754,8 +754,24 @@ export function CartDrawer() {
 
                     {/* Handling & Packaging Fee */}
                     <div className="flex justify-between text-[var(--text-secondary)]">
-                      <span>Handling & Packaging</span>
-                      <span>{formatCurrency(bill.handlingFee)}</span>
+                      <div className="flex items-center gap-1">
+                        <span>Handling Fee</span>
+                        <span className="text-[10px] text-gray-400 cursor-help" title="Store packaging & operational fee">ⓘ</span>
+                      </div>
+                      <span className="font-medium text-[var(--text-primary)]">
+                        {bill.handlingFee > 0 ? formatCurrency(bill.handlingFee) : "₹0.00"}
+                      </span>
+                    </div>
+
+                    {/* Taxes & GST */}
+                    <div className="flex justify-between items-center text-[var(--text-secondary)]">
+                      <div>
+                        <span>Taxes & GST</span>
+                        <span className="text-[10px] text-[var(--text-muted)] block -mt-0.5">(Includes CGST + SGST)</span>
+                      </div>
+                      <span className="font-medium text-[var(--text-primary)]">
+                        {formatCurrency(bill.taxTotal || 0)}
+                      </span>
                     </div>
 
                     {/* Delivery Fee */}

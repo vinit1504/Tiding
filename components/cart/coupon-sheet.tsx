@@ -7,11 +7,7 @@ import {
   AlertCircle,
   Copy,
   Check,
-  Clock,
-  ChevronRight,
   History,
-  Gift,
-  ArrowRight,
   Loader2,
   X,
   BadgePercent,
@@ -28,7 +24,10 @@ import {
   DrawerClose,
 } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
-import { useCouponsQuery, useMyCouponUsagesQuery } from "@/queries/coupon/use-coupon-queries";
+import {
+  useCouponsQuery,
+  useMyCouponUsagesQuery,
+} from "@/queries/coupon/use-coupon-queries";
 import { useValidateCouponMutation } from "@/queries/coupon/use-coupon-mutations";
 import { CouponRecord } from "@/types/coupon";
 import { formatCurrency } from "@/lib/utils";
@@ -43,10 +42,13 @@ interface CouponSheetProps {
 export function CouponSheet({ open, onOpenChange }: CouponSheetProps) {
   const { items, bill, appliedCoupon, applyCoupon, removeCoupon } = useCart();
   const { data: couponsData, isLoading: isLoadingCoupons } = useCouponsQuery();
-  const { data: usagesData, isLoading: isLoadingUsages } = useMyCouponUsagesQuery();
+  const { data: usagesData, isLoading: isLoadingUsages } =
+    useMyCouponUsagesQuery();
   const validateMutation = useValidateCouponMutation();
 
-  const [activeTab, setActiveTab] = useState<"available" | "history">("available");
+  const [activeTab, setActiveTab] = useState<"available" | "history">(
+    "available",
+  );
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [validatingCode, setValidatingCode] = useState<string | null>(null);
   const [manualCodeInput, setManualCodeInput] = useState("");
@@ -66,7 +68,7 @@ export function CouponSheet({ open, onOpenChange }: CouponSheetProps) {
     const minAmount = Number(coupon.min_cart_amount || 0);
     if (minAmount > 0 && bill.itemTotal < minAmount) {
       toast.error(
-        `Code '${coupon.code}' requires a minimum order of ₹${minAmount}. Add ₹${minAmount - bill.itemTotal} more to apply.`
+        `Code '${coupon.code}' requires a minimum order of ₹${minAmount}. Add ₹${(minAmount - bill.itemTotal).toFixed(2)} more to apply.`,
       );
       return;
     }
@@ -88,7 +90,9 @@ export function CouponSheet({ open, onOpenChange }: CouponSheetProps) {
       });
 
       if (!validation.isValid) {
-        toast.error(validation.message || `Coupon ${coupon.code} is not eligible`);
+        toast.error(
+          validation.message || `Coupon ${coupon.code} is not eligible`,
+        );
         return;
       }
 
@@ -115,7 +119,7 @@ export function CouponSheet({ open, onOpenChange }: CouponSheetProps) {
       const minAmount = Number(matched.min_cart_amount || 0);
       if (minAmount > 0 && bill.itemTotal < minAmount) {
         toast.error(
-          `Code '${matched.code}' requires a minimum order of ₹${minAmount}. Add ₹${minAmount - bill.itemTotal} more to apply.`
+          `Code '${matched.code}' requires a minimum order of ₹${minAmount}. Add ₹${(minAmount - bill.itemTotal).toFixed(2)} more to apply.`,
         );
         return;
       }
@@ -135,7 +139,11 @@ export function CouponSheet({ open, onOpenChange }: CouponSheetProps) {
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent side="right" size="xl" className="w-full sm:max-w-xl md:w-[540px] lg:w-[580px] bg-[var(--background)] flex flex-col shadow-2xl">
+      <DrawerContent
+        side="right"
+        size="xl"
+        className="w-full sm:max-w-xl md:w-[540px] lg:w-[580px] bg-[var(--background)] flex flex-col shadow-2xl"
+      >
         {/* Header */}
         <DrawerHeader className="border-b border-[var(--border-light)] pb-3">
           <div className="flex items-center gap-2 text-[#18A818]">
@@ -163,7 +171,9 @@ export function CouponSheet({ open, onOpenChange }: CouponSheetProps) {
                   : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface)]"
               }`}
             >
-              <BadgePercent className={`h-4 w-4 ${activeTab === "available" ? "text-white" : "text-[#18A818]"}`} />
+              <BadgePercent
+                className={`h-4 w-4 ${activeTab === "available" ? "text-white" : "text-[#18A818]"}`}
+              />
               <span>Available Coupons ({coupons.length})</span>
             </button>
             <button
@@ -175,7 +185,9 @@ export function CouponSheet({ open, onOpenChange }: CouponSheetProps) {
                   : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface)]"
               }`}
             >
-              <History className={`h-4 w-4 ${activeTab === "history" ? "text-white" : "text-[var(--text-muted)]"}`} />
+              <History
+                className={`h-4 w-4 ${activeTab === "history" ? "text-white" : "text-[var(--text-muted)]"}`}
+              />
               <span>My Redemptions</span>
             </button>
           </div>
@@ -186,12 +198,17 @@ export function CouponSheet({ open, onOpenChange }: CouponSheetProps) {
           {activeTab === "available" && (
             <>
               {/* Manual Promo Code Input */}
-              <form onSubmit={handleManualApply} className="flex items-center gap-2">
+              <form
+                onSubmit={handleManualApply}
+                className="flex items-center gap-2"
+              >
                 <div className="relative flex-1">
                   <input
                     type="text"
                     value={manualCodeInput}
-                    onChange={(e) => setManualCodeInput(e.target.value.toUpperCase())}
+                    onChange={(e) =>
+                      setManualCodeInput(e.target.value.toUpperCase())
+                    }
                     placeholder="Enter Coupon Code"
                     className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] pl-3 pr-8 py-2 text-xs font-bold uppercase tracking-wider placeholder:normal-case placeholder:font-normal focus:outline-none focus:border-[#18A818]"
                   />
@@ -208,7 +225,10 @@ export function CouponSheet({ open, onOpenChange }: CouponSheetProps) {
                 <Button
                   type="submit"
                   size="sm"
-                  disabled={validatingCode === manualCodeInput.trim().toUpperCase() || !manualCodeInput.trim()}
+                  disabled={
+                    validatingCode === manualCodeInput.trim().toUpperCase() ||
+                    !manualCodeInput.trim()
+                  }
                   className="bg-[#18A818] hover:bg-[#148F14] text-white text-xs font-bold h-9 px-4 shrink-0 shadow-xs"
                 >
                   {validatingCode === manualCodeInput.trim().toUpperCase() ? (
@@ -228,12 +248,13 @@ export function CouponSheet({ open, onOpenChange }: CouponSheetProps) {
                       <span>{appliedCoupon.code} is currently active</span>
                     </div>
                     <p className="text-[11px] text-[var(--text-secondary)]">
-                      Discount of {formatCurrency(bill.couponDiscount)} applied to your basket
+                      Discount of {formatCurrency(bill.couponDiscount)} applied
+                      to your basket
                     </p>
                   </div>
                   <button
                     onClick={removeCoupon}
-                    className="text-[11px] font-bold text-rose-500 hover:text-rose-600 hover:underline px-2 py-1"
+                    className="text-[11px] font-bold text-rose-500 hover:text-rose-600 hover:underline px-2 py-1 cursor-pointer"
                   >
                     Remove
                   </button>
@@ -249,16 +270,33 @@ export function CouponSheet({ open, onOpenChange }: CouponSheetProps) {
                 {isLoadingCoupons ? (
                   <div className="space-y-3">
                     {[1, 2, 3].map((n) => (
-                      <div key={n} className="h-28 rounded-2xl bg-[var(--surface-secondary)] animate-pulse" />
+                      <div
+                        key={n}
+                        className="h-28 rounded-2xl bg-[var(--surface-secondary)] animate-pulse"
+                      />
                     ))}
                   </div>
                 ) : coupons.length > 0 ? (
                   coupons.map((coupon) => {
                     const minAmount = Number(coupon.min_cart_amount || 0);
                     const isMinReached = bill.itemTotal >= minAmount;
+                    const usedCount = Number(
+                      coupon.used_count ??
+                        (coupon as any).redemption_count ??
+                        0,
+                    );
+                    const usageLimitTotal = coupon.usage_limit_total
+                      ? Number(coupon.usage_limit_total)
+                      : null;
+                    const isLimitReached =
+                      usageLimitTotal !== null && usedCount >= usageLimitTotal;
                     const isCurrentApplied =
-                      appliedCoupon?.code?.toUpperCase() === coupon.code.toUpperCase() && isMinReached;
-                    const diffToUnlock = Math.max(0, minAmount - bill.itemTotal);
+                      appliedCoupon?.code?.toUpperCase() ===
+                        coupon.code.toUpperCase() && isMinReached;
+                    const diffToUnlock = Math.max(
+                      0,
+                      minAmount - bill.itemTotal,
+                    );
 
                     const discountDisplay =
                       coupon.discount_type === "PERCENTAGE"
@@ -271,7 +309,9 @@ export function CouponSheet({ open, onOpenChange }: CouponSheetProps) {
                         className={`group relative rounded-2xl border p-4 space-y-3 transition-all ${
                           isCurrentApplied
                             ? "border-[#18A818] bg-[#18A818]/5 shadow-sm"
-                            : "border-[var(--border)] bg-[var(--surface)] hover:border-[#18A818]/40"
+                            : isLimitReached
+                              ? "border-[var(--border)] bg-gray-50/50 dark:bg-neutral-900/40 opacity-75"
+                              : "border-[var(--border)] bg-[var(--surface)] hover:border-[#18A818]/40"
                         }`}
                       >
                         {/* Header: Discount Badge & Apply Button */}
@@ -291,14 +331,22 @@ export function CouponSheet({ open, onOpenChange }: CouponSheetProps) {
                               <CheckCircle2 className="h-3.5 w-3.5" />
                               Applied
                             </span>
+                          ) : isLimitReached ? (
+                            <span className="text-[11px] font-bold text-gray-500 bg-gray-200 dark:bg-neutral-800 px-2.5 py-1 rounded-lg">
+                              Limit Reached
+                            </span>
                           ) : (
                             <Button
                               size="sm"
                               onClick={() => handleApplyCouponRecord(coupon)}
-                              disabled={validatingCode === coupon.code || !isMinReached}
+                              disabled={
+                                validatingCode === coupon.code ||
+                                !isMinReached ||
+                                isLimitReached
+                              }
                               className={`h-7 px-3 text-xs font-bold shadow-xs ${
-                                isMinReached
-                                  ? "bg-[#18A818] hover:bg-[#148F14] text-white"
+                                isMinReached && !isLimitReached
+                                  ? "bg-[#18A818] hover:bg-[#148F14] text-white cursor-pointer"
                                   : "bg-[var(--surface-secondary)] text-[var(--text-muted)] cursor-not-allowed"
                               }`}
                             >
@@ -325,8 +373,9 @@ export function CouponSheet({ open, onOpenChange }: CouponSheetProps) {
                               <span>{coupon.code}</span>
                             </div>
                             <button
+                              type="button"
                               onClick={(e) => handleCopyCode(coupon.code, e)}
-                              className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-1"
+                              className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-1 cursor-pointer"
                               title="Copy code"
                             >
                               {copiedCode === coupon.code ? (
@@ -337,23 +386,30 @@ export function CouponSheet({ open, onOpenChange }: CouponSheetProps) {
                             </button>
                           </div>
 
-                          {/* Quota / Expiry Info */}
-                          <div className="text-[10px] text-[var(--text-muted)] text-right">
-                            {coupon.usage_limit_per_user_per_month > 1 && (
-                              <p className="font-semibold text-neutral-600 dark:text-neutral-300">
-                                {coupon.usage_limit_per_user_per_month} uses/month
+                          {/* Quota / Redemption & Expiry Info */}
+                          <div className="text-[10px] text-[var(--text-muted)] text-right space-y-0.5">
+                            {usageLimitTotal !== null ? (
+                              <p
+                                className={`font-semibold ${isLimitReached ? "text-rose-500 font-bold" : "text-emerald-700 dark:text-emerald-400"}`}
+                              >
+                                Used: {usedCount} / {usageLimitTotal}
                               </p>
-                            )}
+                            ) : coupon.usage_limit_per_user_per_month > 1 ? (
+                              <p className="font-semibold text-neutral-600 dark:text-neutral-300">
+                                {coupon.usage_limit_per_user_per_month}{" "}
+                                uses/month
+                              </p>
+                            ) : null}
                             <p>Min order: {formatCurrency(minAmount)}</p>
                           </div>
                         </div>
 
                         {/* Minimum Order Value Warning / Unlock message */}
-                        {!isMinReached && (
+                        {!isMinReached && !isLimitReached && (
                           <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-2.5 py-1.5 text-[11px] text-amber-800 dark:text-amber-300 flex items-center gap-1.5 font-medium">
                             <AlertCircle className="h-3 w-3 text-amber-600 shrink-0" />
                             <span>
-                              Add {formatCurrency(diffToUnlock)} more to basket to use this coupon
+                              Add ₹{diffToUnlock.toFixed(2)} more to apply
                             </span>
                           </div>
                         )}
@@ -367,7 +423,8 @@ export function CouponSheet({ open, onOpenChange }: CouponSheetProps) {
                       No active coupons found
                     </p>
                     <p className="text-[11px] text-[var(--text-muted)]">
-                      Check back later for seasonal festive offers and discounts!
+                      Check back later for seasonal festive offers and
+                      discounts!
                     </p>
                   </div>
                 )}
@@ -385,13 +442,19 @@ export function CouponSheet({ open, onOpenChange }: CouponSheetProps) {
               {isLoadingUsages ? (
                 <div className="space-y-2">
                   {[1, 2, 3].map((n) => (
-                    <div key={n} className="h-16 rounded-xl bg-[var(--surface-secondary)] animate-pulse" />
+                    <div
+                      key={n}
+                      className="h-16 rounded-xl bg-[var(--surface-secondary)] animate-pulse"
+                    />
                   ))}
                 </div>
               ) : usages.length > 0 ? (
                 <div className="divide-y divide-[var(--border-light)] rounded-xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
                   {usages.map((usage) => (
-                    <div key={usage.id} className="p-3 flex items-center justify-between text-xs">
+                    <div
+                      key={usage.id}
+                      className="p-3 flex items-center justify-between text-xs"
+                    >
                       <div className="space-y-0.5">
                         <div className="flex items-center gap-1.5">
                           <span className="font-mono font-bold text-[#18A818]">
@@ -404,7 +467,8 @@ export function CouponSheet({ open, onOpenChange }: CouponSheetProps) {
                           )}
                         </div>
                         <p className="text-[10px] text-[var(--text-muted)]">
-                          Redeemed on {new Date(usage.used_at).toLocaleDateString()}
+                          Redeemed on{" "}
+                          {new Date(usage.used_at).toLocaleDateString()}
                         </p>
                       </div>
 
@@ -426,7 +490,8 @@ export function CouponSheet({ open, onOpenChange }: CouponSheetProps) {
                     No redemption history yet
                   </p>
                   <p className="text-[11px] text-[var(--text-muted)] max-w-xs mx-auto">
-                    Coupons you apply and redeem during checkout will be recorded here for your savings summary.
+                    Coupons you apply and redeem during checkout will be
+                    recorded here for your savings summary.
                   </p>
                 </div>
               )}

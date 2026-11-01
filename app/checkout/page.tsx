@@ -1191,8 +1191,18 @@ export default function CheckoutPage() {
                 )}
               </div>
               <div className="flex justify-between">
-                <span>Handling & Packaging</span>
-                <span>{formatCurrency(bill.handlingFee)}</span>
+                <div className="flex items-center gap-1">
+                  <span>Handling Fee</span>
+                  <span className="text-[10px] text-gray-400 cursor-help" title="Store packaging & operational fee">ⓘ</span>
+                </div>
+                <span>{bill.handlingFee > 0 ? formatCurrency(bill.handlingFee) : "₹0.00"}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <div>
+                  <span>Taxes & GST</span>
+                  <span className="text-[10px] text-[var(--text-muted)] block -mt-0.5">(Includes CGST + SGST)</span>
+                </div>
+                <span>{formatCurrency(bill.taxTotal || 0)}</span>
               </div>
               {bill.couponDiscount > 0 && (
                 <div className="flex justify-between font-bold text-[#18A818] bg-[#18A818]/10 px-2 py-1 rounded">

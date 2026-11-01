@@ -64,6 +64,7 @@ export interface CheckoutRecord {
   subtotal: number;
   discount_total: number;
   shipping_total: number;
+  handling_fee?: number;
   tax_total: number;
   cgst_amount: number;
   sgst_amount: number;
@@ -159,6 +160,7 @@ export interface OrderWithItems {
     subtotal: number;
     discount_total: number;
     shipping_total: number;
+  handling_fee?: number;
     tax_total: number;
     grand_total: number;
     shipping_address: AddressSnapshot;

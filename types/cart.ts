@@ -49,6 +49,7 @@ export interface CartSummaryResponse {
   currency: string;
   subtotal: number | string;
   shipping_total: number | string;
+  handling_fee?: number | string;
   tax_total: number | string;
   discount_total: number | string;
   grand_total: number | string;
@@ -65,10 +66,13 @@ export interface CartSummaryResponse {
 
 export interface BillBreakdown {
   itemTotal: number;
+  subtotal?: number;
   mrpTotal: number;
   discountTotal: number;
   deliveryFee: number;
+  shippingTotal?: number;
   handlingFee: number;
+  taxTotal?: number;
   tipAmount: number;
   couponDiscount: number;
   couponCode?: string | null;

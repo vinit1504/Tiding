@@ -16,6 +16,7 @@ export interface CouponRecord {
   usage_limit_per_user: number;
   usage_limit_per_user_per_month: number;
   used_count: number;
+  redemption_count?: number;
   is_active: boolean;
   applies_to: CouponAppliesTo;
   created_at: string | Date;
