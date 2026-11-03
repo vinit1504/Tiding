@@ -49,28 +49,9 @@ export default function OffersPage() {
   const handleApplyCoupon = async (coupon: CouponRecord) => {
     setApplyingCode(coupon.code);
     try {
-      const cartItemsPayload = items.map((it) => ({
-        productId: it.productId,
-        categoryId: (it as any).categoryId || "cat_general",
-        quantity: it.quantity,
-        unitPrice: it.price,
-      }));
-
-      const validation = await validateMutation.mutateAsync({
-        code: coupon.code,
-        cartTotal: bill.itemTotal,
-        items: cartItemsPayload,
-      });
-
-      if (!validation.isValid) {
-        toast.error(validation.message || `Coupon ${coupon.code} is not eligible`);
-        return;
-      }
-
       await applyCoupon(coupon.code);
-      toast.success(`Applied ${coupon.code} to your cart!`);
-    } catch (err: any) {
-      toast.error(err?.message || `Failed to apply ${coupon.code}`);
+    } catch {
+      // toast is handled in applyCoupon
     } finally {
       setApplyingCode(null);
     }

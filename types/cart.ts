@@ -10,6 +10,7 @@ export interface CartItem {
   cartItemId?: string; // Specific backend database line item UUID
   productId: string;
   variantId?: string;
+  categoryId?: string;
   name: string;
   slug: string;
   image_url: string;

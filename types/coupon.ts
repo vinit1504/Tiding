@@ -43,9 +43,10 @@ export interface CouponEligibilityResult {
 
 export interface CartItemCouponInput {
   productId: string;
-  categoryId: string;
   quantity: number;
   unitPrice: number;
+  categoryId?: string;
+  variantId?: string;
 }
 
 export interface ValidateCouponPayload {
@@ -54,15 +55,38 @@ export interface ValidateCouponPayload {
   items: CartItemCouponInput[];
 }
 
+export interface CouponValidationData {
+  coupon: {
+    id: string;
+    code: string;
+    name: string;
+    discount_type: DiscountType;
+    discount_value: string | number;
+  };
+  discountAmount: number;
+  finalPayableAmount: number;
+  remainingUserUsages: number;
+  remainingMonthlyUsages: number;
+}
+
 export interface CouponValidationResult {
+  coupon: {
+    id: string;
+    code: string;
+    name: string;
+    discount_type: DiscountType;
+    discount_value: string | number;
+  };
+  discountAmount: number;
+  finalPayableAmount: number;
+  remainingUserUsages: number;
+  remainingMonthlyUsages: number;
   isValid: boolean;
   couponId: string;
   code: string;
   name: string;
   discountType: DiscountType;
   discountValue: number;
-  discountAmount: number;
-  finalPayableAmount: number;
   monthlyUsageRemaining: number;
   lifetimeUsageRemaining: number;
   message: string;
@@ -73,6 +97,16 @@ export interface RedeemCouponCheckoutPayload {
   orderId?: string;
   cartTotal: number;
   items: CartItemCouponInput[];
+}
+
+export interface ApplyCouponResult {
+  usageId: string;
+  discountAmount: number;
+  finalPayableAmount: number;
+  remainingUserUsages: number;
+  remainingMonthlyUsages: number;
+  message?: string;
+  success?: boolean;
 }
 
 export interface RollbackCouponPayload {
@@ -97,6 +131,7 @@ export interface CouponQueryFilter {
   page?: number;
   limit?: number;
   search?: string;
+  scope?: "customer" | "admin" | string;
   isActive?: boolean;
   discountType?: DiscountType;
   appliesTo?: CouponAppliesTo;

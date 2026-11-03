@@ -170,19 +170,20 @@ export function AuthDrawer() {
     if (e) e.preventDefault();
 
     if (authMethod === "email") {
-      const trimmedEmail = email.trim().toLowerCase();
-      if (!trimmedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      const cleanEmail = email.trim().toLowerCase();
+      if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
         toast.error("Please enter a valid email address");
         return;
       }
 
       setIsLoading(true);
       try {
-        const data = await authService.sendEmailOtp(trimmedEmail);
+        const data = await authService.sendEmailOtp(cleanEmail);
+        setEmail(cleanEmail);
         setStep("otp");
         setCooldown(60);
         setOtpDigits(EMPTY_OTP);
-        toast.success(data?.message || `Verification code sent to ${trimmedEmail}`);
+        toast.success(data?.message || `Verification code sent to ${cleanEmail}`);
       } catch (err: any) {
         toast.error(err?.message || "Failed to send verification code. Please try again.");
       } finally {
@@ -216,7 +217,8 @@ export function AuthDrawer() {
     setIsResending(true);
     try {
       if (authMethod === "email") {
-        await authService.sendEmailOtp(email.trim().toLowerCase());
+        const cleanEmail = email.trim().toLowerCase();
+        await authService.sendEmailOtp(cleanEmail);
       } else {
         await authService.sendOtp(phone.trim());
       }
@@ -247,7 +249,8 @@ export function AuthDrawer() {
     try {
       let result;
       if (authMethod === "email") {
-        result = await authService.verifyEmailOtp(email.trim().toLowerCase(), cleanOtp);
+        const cleanEmail = email.trim().toLowerCase();
+        result = await authService.verifyEmailOtp(cleanEmail, cleanOtp);
       } else {
         result = await authService.verifyOtp(phone.trim(), cleanOtp);
       }
@@ -664,7 +667,8 @@ export function AuthDrawer() {
                         type="email"
                         placeholder="yourname@domain.com"
                         value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        onChange={(e) => setEmail(e.target.value.toLowerCase())}
+                        onBlur={() => setEmail((prev) => prev.trim().toLowerCase())}
                         className={inputClass}
                         autoFocus
                         required

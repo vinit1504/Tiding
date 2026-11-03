@@ -21,6 +21,8 @@ export interface DeliveryLocation {
   darkStoreName?: string;
   storeDistanceKm?: number;
   storeAddress?: string;
+  addressType?: string;
+  savedAddressId?: string;
 }
 
 export interface SavedAddress {

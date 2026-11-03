@@ -83,6 +83,29 @@ export class OrderService {
       { reason }
     );
   }
+
+  /**
+   * GET /api/v1/tracking/orders/:orderId/events
+   * Returns chronological timeline of order fulfillment milestones
+   */
+  async getOrderTrackingEvents(orderId: string): Promise<any[]> {
+    const res = await apiClient.get<any>(`/tracking/orders/${orderId}/events`, []);
+    if (Array.isArray(res)) return res;
+    if (res && Array.isArray(res.data)) return res.data;
+    return [];
+  }
+
+  /**
+   * PATCH /api/v1/orders/:orderId/status
+   * Updates order status milestone (ADMIN / STORE STAFF)
+   */
+  async updateOrderStatus(
+    orderId: string,
+    status: "CONFIRMED" | "PROCESSING" | "OUT_FOR_DELIVERY" | "DELIVERED" | "CANCELLED",
+    notes?: string
+  ): Promise<any> {
+    return apiClient.patch(`/orders/${orderId}/status`, { status, notes });
+  }
 }
 
 export const orderService = new OrderService();

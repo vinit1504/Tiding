@@ -112,10 +112,15 @@ export const activeCouponsAtom = atom<CouponRecord[]>([]);
 
 // Applied coupon state
 export interface AppliedCouponState {
+  couponId?: string;
   code: string;
   discount: number;
   description?: string;
   minCartAmount?: number;
+  discountType?: string;
+  discountValue?: string | number;
+  remainingUserUsages?: number;
+  remainingMonthlyUsages?: number;
 }
 
 export const appliedCouponAtom = atom<AppliedCouponState | null>(null);

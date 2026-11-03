@@ -76,6 +76,16 @@ export function useRemoveCheckoutCouponMutation() {
   });
 }
 
+export function useRecalculateCheckoutMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (checkoutId: string) => checkoutService.recalculate(checkoutId),
+    onSuccess: (data) => {
+      queryClient.setQueryData(QUERY_KEYS.CHECKOUT.ACTIVE(), data);
+    },
+  });
+}
+
 export function useCheckoutPaymentIntentMutation() {
   return useMutation({
     mutationFn: ({

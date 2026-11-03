@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import {
   Dialog,
   DialogContent,
@@ -11,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { CheckoutValidationWarning } from "@/types/cart";
-import { AlertCircle, AlertTriangle, ArrowRight, CheckCircle2, TrendingUp } from "lucide-react";
+import { AlertTriangle, ArrowRight, TrendingUp } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
 interface InventoryValidationModalProps {
@@ -127,7 +126,7 @@ export function InventoryValidationModal({
             size="sm"
             disabled={isUpdating}
             onClick={onUpdateCartAndProceed}
-            className="w-full sm:w-auto flex-1 bg-[#18A818] hover:bg-[#148F14] text-white font-black text-xs flex items-center justify-center gap-2 shadow-md h-9.5"
+            className="w-full sm:w-auto flex-1 bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-black text-xs flex items-center justify-center gap-2 shadow-md h-9.5 cursor-pointer"
           >
             <span>Update Cart & Proceed</span>
             <ArrowRight className="h-3.5 w-3.5" />

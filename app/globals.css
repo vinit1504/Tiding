@@ -5,6 +5,34 @@
 @theme {
   --font-sans: var(--font-poppins), "Poppins", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-poppins: var(--font-poppins), "Poppins", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  --color-primary: #18A818;
+  --color-primary-hover: #148F14;
+  --color-primary-light: #EAF8EA;
+
+  --color-secondary: #78D808;
+  --color-secondary-hover: #67B907;
+  --color-secondary-light: #F1FBD9;
+
+  --color-brand-navy: #081828;
+  --color-brand-green-dark: #087838;
+
+  --color-background: #F8FAF7;
+  --color-surface: #FFFFFF;
+  --color-surface-secondary: #F3F7F1;
+  --color-surface-hover: #EBF2E9;
+
+  --color-text-primary: #10251A;
+  --color-text-secondary: #64746A;
+  --color-text-muted: #94A29A;
+
+  --color-border: #E2EAE2;
+  --color-border-light: #EDF2ED;
+
+  --color-success: #18A818;
+  --color-warning: #F4B740;
+  --color-error: #E5484D;
+  --color-info: #2488C9;
 }
 
 @layer base {
@@ -206,5 +234,43 @@ input:focus-visible {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* Wishlist Heart Bounce & Ring Pulse Animation */
+@keyframes heartBeatPop {
+  0% {
+    transform: scale(1);
+  }
+  20% {
+    transform: scale(0.72);
+  }
+  45% {
+    transform: scale(1.38);
+  }
+  70% {
+    transform: scale(0.92);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes heartRingPulse {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+.animate-heart-pop {
+  animation: heartBeatPop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.animate-heart-ring {
+  animation: heartRingPulse 0.55s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
 }
 

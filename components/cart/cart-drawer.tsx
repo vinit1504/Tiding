@@ -242,12 +242,12 @@ export function CartDrawer() {
                 <ShoppingCart className="h-5 w-5" />
               </div>
               <div>
-                <DrawerTitle className="text-base font-black text-[var(--text-primary)]">
+                <DrawerTitle className="text-sm sm:text-base font-normal text-[var(--text-primary)]">
                   My Shopping Cart
                 </DrawerTitle>
-                <DrawerDescription className="text-xs text-[var(--text-secondary)]">
+                <DrawerDescription className="text-xs font-normal text-[var(--text-secondary)]">
                   Delivering in{" "}
-                  <strong>{location.deliveryEtaMinutes || 10} mins</strong>
+                  <span className="font-normal text-[var(--text-primary)]">{location.deliveryEtaMinutes || 10} mins</span>
                 </DrawerDescription>
               </div>
             </div>
@@ -259,9 +259,9 @@ export function CartDrawer() {
             <button
               type="button"
               onClick={() => setActiveTab("cart")}
-              className={`flex items-center justify-center gap-2 py-2 px-3 text-xs font-black rounded-lg transition-all duration-200 cursor-pointer ${
+              className={`flex items-center justify-center gap-2 py-2 px-3 text-xs font-normal rounded-lg transition-all duration-200 cursor-pointer ${
                 activeTab === "cart"
-                  ? "bg-[#18A818] text-white shadow-sm"
+                  ? "bg-[#18A818] text-white shadow-2xs"
                   : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface)]"
               }`}
             >
@@ -271,9 +271,9 @@ export function CartDrawer() {
             <button
               type="button"
               onClick={() => setActiveTab("saved")}
-              className={`flex items-center justify-center gap-2 py-2 px-3 text-xs font-black rounded-lg transition-all duration-200 cursor-pointer ${
+              className={`flex items-center justify-center gap-2 py-2 px-3 text-xs font-normal rounded-lg transition-all duration-200 cursor-pointer ${
                 activeTab === "saved"
-                  ? "bg-[#18A818] text-white shadow-sm"
+                  ? "bg-[#18A818] text-white shadow-2xs"
                   : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface)]"
               }`}
             >
@@ -323,15 +323,15 @@ export function CartDrawer() {
                     <Clock className="h-4 w-4" />
                   </div>
                   <div>
-                    <p className="font-bold text-[#18A818]">
+                    <p className="font-normal text-[#18A818]">
                       Delivery in {location.deliveryEtaMinutes || 10} mins
                     </p>
-                    <p className="text-[11px] text-[var(--text-secondary)]">
+                    <p className="text-[11px] font-normal text-[var(--text-secondary)]">
                       From {location.darkStoreName || "Express Hub"}
                     </p>
                   </div>
                 </div>
-                <span className="text-[10px] font-black uppercase tracking-wider text-[#18A818] bg-white dark:bg-neutral-900 px-2 py-0.5 rounded-full border border-[#18A818]/30">
+                <span className="text-[10px] font-normal uppercase tracking-wider text-[#18A818] bg-white dark:bg-neutral-900 px-2 py-0.5 rounded-full border border-[#18A818]/30">
                   INSTANT DELIVERY
                 </span>
               </div>
@@ -340,9 +340,9 @@ export function CartDrawer() {
               {bill.amountNeededForFreeDelivery > 0 ? (
                 <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold">
+                    <span className="font-normal">
                       Add {formatCurrency(bill.amountNeededForFreeDelivery)}{" "}
-                      more for <strong>FREE Delivery</strong>
+                      more for FREE Delivery
                     </span>
                     <Truck className="h-3.5 w-3.5 text-amber-600" />
                   </div>
@@ -359,7 +359,7 @@ export function CartDrawer() {
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 rounded-xl border border-[#18A818]/30 bg-[#18A818]/10 p-2.5 text-xs text-[#18A818] font-bold">
+                <div className="flex items-center gap-2 rounded-xl border border-[#18A818]/30 bg-[#18A818]/10 p-2.5 text-xs text-[#18A818] font-normal">
                   <CheckCircle2 className="h-4 w-4" />
                   <span>Congratulations! You unlocked FREE Delivery</span>
                 </div>
@@ -391,10 +391,10 @@ export function CartDrawer() {
 
                           {/* Details */}
                           <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-[var(--text-primary)] truncate">
+                            <p className="text-xs font-normal text-[var(--text-primary)] truncate">
                               {item.name}
                             </p>
-                            <p className="text-[11px] text-[var(--text-muted)]">
+                            <p className="text-[11px] font-normal text-[var(--text-muted)]">
                               {item.unit}
                             </p>
 
@@ -406,7 +406,7 @@ export function CartDrawer() {
                                     ([k, v]) => (
                                       <span
                                         key={k}
-                                        className="text-[10px] font-medium bg-[var(--surface-secondary)] text-[var(--text-secondary)] px-1.5 py-0.5 rounded border border-[var(--border-light)] capitalize"
+                                        className="text-[10px] font-normal bg-[var(--surface-secondary)] text-[var(--text-secondary)] px-1.5 py-0.5 rounded border border-[var(--border-light)] capitalize"
                                       >
                                         {k}: {String(v)}
                                       </span>
@@ -416,11 +416,11 @@ export function CartDrawer() {
                               )}
 
                             <div className="flex items-center gap-1.5 mt-0.5">
-                              <span className="text-xs font-black text-[var(--text-primary)]">
+                              <span className="text-xs font-normal text-[var(--text-primary)]">
                                 {formatCurrency(item.price * item.quantity)}
                               </span>
                               {item.mrp > item.price && (
-                                <span className="text-[10px] text-[var(--text-muted)] line-through">
+                                <span className="text-[10px] font-normal text-[var(--text-muted)] line-through">
                                   {formatCurrency(item.mrp * item.quantity)}
                                 </span>
                               )}
@@ -429,7 +429,7 @@ export function CartDrawer() {
 
                           {/* Stepper */}
                           <div className="flex items-center gap-1.5 shrink-0">
-                            <div className="flex items-center rounded-lg bg-[#18A818] text-white shadow-xs">
+                            <div className="flex items-center rounded-lg bg-[#18A818] text-white shadow-2xs">
                               <button
                                 onClick={() =>
                                   updateQuantity(
@@ -442,7 +442,7 @@ export function CartDrawer() {
                               >
                                 <Minus className="h-3 w-3" />
                               </button>
-                              <span className="w-6 text-center text-xs font-black select-none">
+                              <span className="w-6 text-center text-xs font-normal select-none">
                                 {item.quantity}
                               </span>
                               <button
@@ -490,21 +490,21 @@ export function CartDrawer() {
 
                   {/* Coupon & Promotional Discount Module */}
                   <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 space-y-3">
-                    <div className="flex items-center justify-between text-xs font-bold text-[var(--text-primary)]">
+                    <div className="flex items-center justify-between text-xs font-normal text-[var(--text-primary)]">
                       <div className="flex items-center gap-1.5">
                         <Tag className="h-3.5 w-3.5 text-[#18A818]" />
                         <span>Apply Coupon & Offers</span>
                       </div>
                       <div className="flex items-center gap-2">
                         {appliedCoupon && (
-                          <span className="text-[10px] text-[#18A818] font-black uppercase tracking-wider bg-[#18A818]/10 px-2 py-0.5 rounded-full border border-[#18A818]/20">
+                          <span className="text-[10px] text-[#18A818] font-normal uppercase tracking-wider bg-[#18A818]/10 px-2 py-0.5 rounded-full border border-[#18A818]/20">
                             Active
                           </span>
                         )}
                         <button
                           type="button"
                           onClick={() => setIsCouponSheetOpen(true)}
-                          className="text-[11px] font-bold text-[#18A818] hover:underline flex items-center gap-0.5 cursor-pointer"
+                          className="text-[11px] font-normal text-[#18A818] hover:underline flex items-center gap-0.5 cursor-pointer"
                         >
                           <span>View All ({coupons.length})</span>
                           <ChevronRight className="h-3 w-3" />
@@ -516,17 +516,17 @@ export function CartDrawer() {
                     {appliedCoupon && bill.couponDiscount > 0 && (
                       <div className="flex items-center justify-between rounded-xl bg-[#18A818]/10 border border-[#18A818]/30 p-2.5 text-xs">
                         <div className="space-y-0.5">
-                          <p className="font-bold text-[#18A818] flex items-center gap-1.5">
+                          <p className="font-normal text-[#18A818] flex items-center gap-1.5">
                             <CheckCircle2 className="h-3.5 w-3.5" />
                             <span>Code &apos;{appliedCoupon.code}&apos; Applied!</span>
                           </p>
-                          <p className="text-[11px] text-[var(--text-secondary)]">
+                          <p className="text-[11px] font-normal text-[var(--text-secondary)]">
                             You saved {formatCurrency(bill.couponDiscount)} with this order
                           </p>
                         </div>
                         <button
                           onClick={removeCoupon}
-                          className="text-[11px] font-bold text-rose-500 hover:text-rose-600 hover:underline px-2 py-1"
+                          className="text-[11px] font-normal text-rose-500 hover:text-rose-600 hover:underline px-2 py-1"
                         >
                           Remove
                         </button>
@@ -540,13 +540,13 @@ export function CartDrawer() {
                         value={couponInput}
                         onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
                         placeholder="Enter promo code (e.g. SUPER55)"
-                        className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 text-xs uppercase font-medium placeholder:normal-case focus:outline-none focus:border-[#18A818]"
+                        className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 text-xs uppercase font-normal placeholder:normal-case placeholder:font-normal focus:outline-none focus:border-[#18A818]"
                       />
                       <Button
                         size="sm"
                         onClick={() => handleApplyCoupon()}
                         disabled={isApplyingCoupon || !couponInput.trim()}
-                        className="h-8 bg-[#18A818] hover:bg-[#148F14] text-white text-xs font-bold shrink-0"
+                        className="h-8 bg-[#18A818] hover:bg-[#148F14] text-white text-xs font-normal shrink-0"
                       >
                         {isApplyingCoupon ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -593,7 +593,7 @@ export function CartDrawer() {
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="space-y-1 min-w-0 flex-1">
                                     <div className="flex items-center gap-1.5 flex-wrap">
-                                      <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-dashed border-[#18A818]/60 bg-[#18A818]/10 text-[#18A818] font-mono font-black text-[11px] tracking-wider">
+                                      <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-dashed border-[#18A818]/60 bg-[#18A818]/10 text-[#18A818] font-mono font-normal text-[11px] tracking-wider">
                                         <span>{coupon.code}</span>
                                         <button
                                           type="button"
@@ -608,16 +608,16 @@ export function CartDrawer() {
                                           )}
                                         </button>
                                       </div>
-                                      <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                                      <span className="text-[10px] font-normal uppercase tracking-wider text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 px-1.5 py-0.5 rounded">
                                         {discountDisplay}
                                       </span>
                                     </div>
 
-                                    <p className="font-bold text-[var(--text-primary)] text-xs truncate">
+                                    <p className="font-normal text-[var(--text-primary)] text-xs truncate">
                                       {coupon.name}
                                     </p>
 
-                                    <p className="text-[10px] text-[var(--text-secondary)] line-clamp-1">
+                                    <p className="text-[10px] font-normal text-[var(--text-secondary)] line-clamp-1">
                                       {coupon.description ||
                                         `Valid on orders above ₹${minAmount}${
                                           maxCap ? ` • Max savings ₹${maxCap}` : ""
@@ -627,13 +627,13 @@ export function CartDrawer() {
                                     {/* Eligibility status */}
                                     <div className="pt-0.5">
                                       {isEligible ? (
-                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#18A818]">
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-normal text-[#18A818]">
                                           <CheckCircle2 className="h-2.5 w-2.5" />
                                           Eligible on this basket
                                         </span>
                                       ) : (
                                         <div className="space-y-0.5">
-                                          <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                                          <span className="text-[10px] font-normal text-amber-600 dark:text-amber-400">
                                             Add {formatCurrency(amountNeeded)} more to unlock (Min order ₹{minAmount})
                                           </span>
                                           <div className="h-1 w-full bg-[var(--border)] rounded-full overflow-hidden">
@@ -655,7 +655,7 @@ export function CartDrawer() {
                                   {/* Right side Apply / Applied button */}
                                   <div className="shrink-0 self-center">
                                     {isCurrentApplied ? (
-                                      <span className="text-[10px] font-black text-[#18A818] bg-[#18A818]/15 px-2 py-1 rounded">
+                                      <span className="text-[10px] font-normal text-[#18A818] bg-[#18A818]/15 px-2 py-1 rounded">
                                         Applied ✓
                                       </span>
                                     ) : isEligible ? (
@@ -663,7 +663,7 @@ export function CartDrawer() {
                                         size="sm"
                                         onClick={() => handleApplyCoupon(coupon.code)}
                                         disabled={isApplyingCoupon}
-                                        className="h-7 px-3 text-[11px] font-black bg-[#18A818] hover:bg-[#148F14] text-white shadow-xs"
+                                        className="h-7 px-3 text-[11px] font-normal bg-[#18A818] hover:bg-[#148F14] text-white shadow-2xs"
                                       >
                                         APPLY
                                       </Button>
@@ -734,53 +734,53 @@ export function CartDrawer() {
                   {/* Bill Summary - Clean, Transparent, and Mathematically Consistent */}
                   <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 space-y-2.5 text-xs">
                     <div className="flex items-center justify-between border-b border-[var(--border-light)] pb-2">
-                      <span className="font-bold text-[var(--text-primary)]">Bill Summary</span>
-                      <span className="text-[11px] text-[var(--text-muted)] font-medium">({cartCount} {cartCount === 1 ? "item" : "items"})</span>
+                      <span className="font-normal text-[var(--text-primary)]">Bill Summary</span>
+                      <span className="text-[11px] text-[var(--text-muted)] font-normal">({cartCount} {cartCount === 1 ? "item" : "items"})</span>
                     </div>
 
                     {/* Struck-through MRP if items are discounted */}
                     {bill.mrpTotal > bill.itemTotal && (
-                      <div className="flex justify-between text-[var(--text-muted)]">
+                      <div className="flex justify-between text-[var(--text-muted)] font-normal">
                         <span>Items MRP</span>
                         <span className="line-through">{formatCurrency(bill.mrpTotal)}</span>
                       </div>
                     )}
 
                     {/* Item Total (Actual discounted price of items) */}
-                    <div className="flex justify-between text-[var(--text-primary)] font-semibold">
+                    <div className="flex justify-between text-[var(--text-primary)] font-normal">
                       <span>Item Total</span>
                       <span>{formatCurrency(bill.itemTotal)}</span>
                     </div>
 
                     {/* Handling & Packaging Fee */}
-                    <div className="flex justify-between text-[var(--text-secondary)]">
+                    <div className="flex justify-between text-[var(--text-secondary)] font-normal">
                       <div className="flex items-center gap-1">
                         <span>Handling Fee</span>
                         <span className="text-[10px] text-gray-400 cursor-help" title="Store packaging & operational fee">ⓘ</span>
                       </div>
-                      <span className="font-medium text-[var(--text-primary)]">
+                      <span className="font-normal text-[var(--text-primary)]">
                         {bill.handlingFee > 0 ? formatCurrency(bill.handlingFee) : "₹0.00"}
                       </span>
                     </div>
 
                     {/* Taxes & GST */}
-                    <div className="flex justify-between items-center text-[var(--text-secondary)]">
+                    <div className="flex justify-between items-center text-[var(--text-secondary)] font-normal">
                       <div>
                         <span>Taxes & GST</span>
                         <span className="text-[10px] text-[var(--text-muted)] block -mt-0.5">(Includes CGST + SGST)</span>
                       </div>
-                      <span className="font-medium text-[var(--text-primary)]">
+                      <span className="font-normal text-[var(--text-primary)]">
                         {formatCurrency(bill.taxTotal || 0)}
                       </span>
                     </div>
 
                     {/* Delivery Fee */}
-                    <div className="flex justify-between text-[var(--text-secondary)]">
+                    <div className="flex justify-between text-[var(--text-secondary)] font-normal">
                       <span>Delivery Partner Fee</span>
                       {bill.deliveryFee === 0 ? (
                         <div className="flex items-center gap-1.5">
                           <span className="text-[10px] text-[var(--text-muted)] line-through">₹25</span>
-                          <span className="font-bold text-[#18A818]">FREE</span>
+                          <span className="font-normal text-[#18A818]">FREE</span>
                         </div>
                       ) : (
                         <span>{formatCurrency(bill.deliveryFee)}</span>
@@ -789,21 +789,21 @@ export function CartDrawer() {
 
                     {/* Coupon Discount (if applied) */}
                     {bill.couponDiscount > 0 && (
-                      <div className="flex justify-between font-bold text-[#18A818] bg-[#18A818]/10 px-2 py-1 rounded-md">
+                      <div className="flex justify-between font-normal text-[#18A818] bg-[#18A818]/10 px-2 py-1 rounded-md">
                         <span>Coupon Savings ({bill.couponCode})</span>
                         <span>-{formatCurrency(bill.couponDiscount)}</span>
                       </div>
                     )}
 
                     {/* Grand Total */}
-                    <div className="flex justify-between border-t border-[var(--border)] pt-2.5 text-sm font-black text-[var(--text-primary)]">
+                    <div className="flex justify-between border-t border-[var(--border)] pt-2.5 text-sm font-normal text-[var(--text-primary)]">
                       <span>To Pay</span>
                       <span className="text-base text-[#18A818]">{formatCurrency(bill.grandTotal)}</span>
                     </div>
 
                     {/* Total Order Savings Celebration Banner */}
                     {(bill.discountTotal > 0 || bill.deliveryFee === 0) && (
-                      <div className="flex items-center justify-center gap-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 py-1.5 px-2 text-center text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
+                      <div className="flex items-center justify-center gap-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 py-1.5 px-2 text-center text-[11px] font-normal text-emerald-700 dark:text-emerald-400">
                         <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
                         <span>
                           You saved {formatCurrency(
@@ -831,7 +831,7 @@ export function CartDrawer() {
                   <Button
                     size="sm"
                     onClick={() => setIsOpen(false)}
-                    className="bg-[#18A818] hover:bg-[#148F14] text-white font-bold"
+                    className="bg-[#18A818] hover:bg-[#148F14] text-white font-normal"
                   >
                     Start Shopping
                   </Button>
@@ -845,7 +845,7 @@ export function CartDrawer() {
             <div className="space-y-3">
               {savedItems.length > 0 ? (
                 <>
-                  <p className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider px-1">
+                  <p className="text-[11px] font-normal text-[var(--text-muted)] uppercase tracking-wider px-1">
                     Saved Items ({savedCount})
                   </p>
                   <div className="divide-y divide-[var(--border-light)] rounded-xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
@@ -866,13 +866,13 @@ export function CartDrawer() {
                           </div>
 
                           <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-[var(--text-primary)] truncate">
+                            <p className="text-xs font-normal text-[var(--text-primary)] truncate">
                               {item.name}
                             </p>
-                            <p className="text-[11px] text-[var(--text-muted)]">
+                            <p className="text-[11px] font-normal text-[var(--text-muted)]">
                               {item.unit}
                             </p>
-                            <span className="text-xs font-black text-[var(--text-primary)] mt-0.5 inline-block">
+                            <span className="text-xs font-normal text-[var(--text-primary)] mt-0.5 inline-block">
                               {formatCurrency(item.price)}
                             </span>
                           </div>
@@ -883,7 +883,7 @@ export function CartDrawer() {
                               onClick={() =>
                                 moveToCart(item.cartItemId || item.id)
                               }
-                              className="h-7 text-xs bg-[#18A818] hover:bg-[#148F14] text-white font-bold flex items-center gap-1 shadow-xs"
+                              className="h-7 text-xs bg-[#18A818] hover:bg-[#148F14] text-white font-normal flex items-center gap-1 shadow-2xs"
                             >
                               <RotateCcw className="h-3 w-3" />
                               <span>Move to Cart</span>
@@ -908,10 +908,10 @@ export function CartDrawer() {
                   <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--surface-secondary)] text-[var(--text-muted)]">
                     <Bookmark className="h-8 w-8 stroke-[1.5]" />
                   </div>
-                  <h3 className="text-sm font-bold text-[var(--text-primary)]">
+                  <h3 className="text-sm font-normal text-[var(--text-primary)]">
                     No items saved for later
                   </h3>
-                  <p className="text-xs text-[var(--text-muted)] max-w-xs mx-auto">
+                  <p className="text-xs font-normal text-[var(--text-muted)] max-w-xs mx-auto">
                     Items you save from your basket will appear here so you can
                     buy them anytime.
                   </p>
@@ -925,30 +925,43 @@ export function CartDrawer() {
         <DrawerFooter className="border-t border-[var(--border-light)] p-3">
           <div className="flex items-center justify-between gap-3 w-full">
             <DrawerClose asChild>
-              <Button variant="outline" size="sm" className="font-semibold">
+              <Button variant="outline" size="sm" className="font-normal">
                 Close
               </Button>
             </DrawerClose>
 
             {items.length > 0 && activeTab === "cart" && (
-              <Button
-                onClick={handleProceedToCheckout}
-                disabled={isValidating}
-                size="sm"
-                className="bg-[#18A818] hover:bg-[#148F14] text-white flex-1 flex items-center justify-center gap-2 font-black shadow-md h-10"
-              >
-                {isValidating ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Verifying Basket...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>Checkout • {formatCurrency(bill.grandTotal)}</span>
-                    <ArrowRight className="h-4 w-4" />
-                  </>
-                )}
-              </Button>
+              <div className="flex items-center gap-2 flex-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setIsOpen(false);
+                    router.push("/cart");
+                  }}
+                  className="font-normal text-xs h-10 border-emerald-300 text-emerald-700 hover:bg-emerald-50 cursor-pointer"
+                >
+                  View Cart
+                </Button>
+                <Button
+                  onClick={handleProceedToCheckout}
+                  disabled={isValidating}
+                  size="sm"
+                  className="bg-[#0c831f] hover:bg-[#0a6f1a] text-white flex-1 flex items-center justify-center gap-2 font-normal shadow-md h-10 cursor-pointer"
+                >
+                  {isValidating ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Verifying...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Checkout • {formatCurrency(bill.grandTotal)}</span>
+                      <ArrowRight className="h-4 w-4" />
+                    </>
+                  )}
+                </Button>
+              </div>
             )}
           </div>
         </DrawerFooter>

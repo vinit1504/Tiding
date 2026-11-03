@@ -23,6 +23,7 @@ import {
   useCreateWishlistMutation,
   useDeleteWishlistMutation,
 } from "@/queries/wishlist/use-wishlist-queries";
+import { wishlistService } from "@/lib/api/wishlist-service";
 import { AddWishlistItemPayload, WishlistItem, WishlistPriority } from "@/types/wishlist";
 import { toast } from "sonner";
 import { authSessionAtom } from "@/stores";
@@ -30,7 +31,7 @@ import { flyHeartToHeader } from "@/lib/utils/wishlist-animation";
 
 export function useWishlist() {
   const [wishlistIds] = useAtom(wishlistIdsAtom);
-  const [itemIdMap] = useAtom(wishlistItemIdMapAtom);
+  const [itemIdMap, setItemIdMap] = useAtom(wishlistItemIdMapAtom);
   const [customerItems] = useAtom(customerWishlistItemsAtom);
   const wishlistCount = useAtomValue(wishlistCountAtom);
   const session = useAtomValue(authSessionAtom);
@@ -71,11 +72,13 @@ export function useWishlist() {
     (productId?: string, variantId?: string): string | undefined => {
       if (variantId && itemIdMap[variantId]) return itemIdMap[variantId];
       if (productId && itemIdMap[productId]) return itemIdMap[productId];
-      const match = customerItems.find(
-        (it) =>
-          (variantId && it.variantId === variantId) ||
-          (productId && it.productId === productId)
-      );
+      const match = customerItems.find((it: any) => {
+        const pId = it.productId || it.product_id || it.product?.id;
+        const vId = it.variantId || it.variant_id || it.variant?.id;
+        if (variantId && vId && String(vId) === String(variantId)) return true;
+        if (productId && pId && String(pId) === String(productId)) return true;
+        return false;
+      });
       return match?.id;
     },
     [itemIdMap, customerItems]
@@ -129,15 +132,48 @@ export function useWishlist() {
    */
   const removeFromWishlist = useCallback(
     async (productId?: string, variantId?: string, customItemId?: string) => {
-      const resolvedItemId = customItemId || getWishlistItemId(productId, variantId);
-      if (!resolvedItemId) {
-        // Fallback: try optimistic remove using productId
-        if (productId || variantId) {
-          removeMutation.mutate({
-            itemId: (variantId || productId)!,
-            productId,
-            variantId,
+      let resolvedItemId = customItemId || getWishlistItemId(productId, variantId);
+
+      // If we don't have the wishlist item row ID in memory, query customer's wishlist items
+      if (!resolvedItemId && (productId || variantId)) {
+        try {
+          const listRes = await wishlistService.getCustomerWishlist({ limit: 100 });
+          const itemsList = listRes?.items || [];
+          const match = itemsList.find((it: any) => {
+            const pId = it.productId || it.product_id || it.product?.id;
+            const vId = it.variantId || it.variant_id || it.variant?.id;
+            if (variantId && vId && String(vId) === String(variantId)) return true;
+            if (productId && pId && String(pId) === String(productId)) return true;
+            if (productId && it.id && String(it.id) === String(productId)) return true;
+            return false;
           });
+
+          if (match?.id) {
+            resolvedItemId = match.id;
+            setItemIdMap((prev: Record<string, string>) => ({
+              ...prev,
+              ...(productId ? { [productId]: match.id } : {}),
+              ...(variantId ? { [variantId]: match.id } : {}),
+            }));
+          }
+        } catch (fetchErr) {
+          console.warn("Could not fetch customer wishlist items for resolution:", fetchErr);
+        }
+      }
+
+      if (!resolvedItemId) {
+        // Fallback: try optimistic remove using productId or variantId
+        if (productId || variantId) {
+          try {
+            await removeMutation.mutateAsync({
+              itemId: (variantId || productId)!,
+              productId,
+              variantId,
+            });
+            toast.success("Removed from wishlist");
+          } catch (err: any) {
+            toast.error(err?.message || "Failed to remove from wishlist");
+          }
         }
         return;
       }
@@ -153,7 +189,7 @@ export function useWishlist() {
         toast.error(err?.message || "Failed to remove from wishlist");
       }
     },
-    [getWishlistItemId, removeMutation]
+    [getWishlistItemId, removeMutation, setItemIdMap]
   );
 
   /**

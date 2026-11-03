@@ -6,6 +6,7 @@ import {
   ValidateCouponPayload,
   CouponValidationResult,
   RedeemCouponCheckoutPayload,
+  ApplyCouponResult,
   RollbackCouponPayload,
   CouponUsageRecord,
   CouponQueryFilter,
@@ -13,16 +14,18 @@ import {
 
 export class CouponService {
   /**
-   * 1. GET /api/v1/coupons?page=1&limit=20&sortBy=created_at&sortOrder=desc
-   * List Active Coupons (Storefront) - Fetched dynamically from Backend API
+   * 1. GET /api/v1/coupons?scope=customer&page=1&limit=20&sortBy=created_at&sortOrder=desc
+   * List Active Coupons for Customer (Storefront)
    */
   async listActiveCoupons(params?: CouponQueryFilter): Promise<{ coupons: CouponRecord[]; meta?: any }> {
     const page = params?.page || 1;
     const limit = params?.limit || 20;
     const sortBy = params?.sortBy || "created_at";
     const sortOrder = params?.sortOrder || "desc";
+    const scope = params?.scope || "customer";
 
     const query = new URLSearchParams({
+      scope,
       page: String(page),
       limit: String(limit),
       sortBy,
@@ -59,32 +62,70 @@ export class CouponService {
   }
 
   /**
-   * 3. POST /api/v1/coupons/validate
-   * Validate Coupon (Pre-Checkout Engine) directly via Backend API
+   * 3. POST /api/v1/coupons/validate (Step 1: Validate Coupon in Cart - Preview Discount)
+   * Validates conditions without burning the user's quota.
    */
   async validateCoupon(payload: ValidateCouponPayload): Promise<CouponValidationResult> {
-    return apiClient.post<CouponValidationResult, ValidateCouponPayload>(
+    const res = await apiClient.post<any, ValidateCouponPayload>(
       API_ENDPOINTS.COUPONS.VALIDATE,
       payload
     );
+
+    const couponObj = res?.coupon || {
+      id: res?.couponId || "",
+      code: res?.code || payload.code,
+      name: res?.name || payload.code,
+      discount_type: res?.discountType || "FIXED_AMOUNT",
+      discount_value: res?.discountValue ?? res?.discountAmount ?? 0,
+    };
+
+    const discountAmount = Number(res?.discountAmount ?? 0);
+    const finalPayableAmount = Number(
+      res?.finalPayableAmount ?? Math.max(0, payload.cartTotal - discountAmount)
+    );
+    const remainingUserUsages = Number(res?.remainingUserUsages ?? res?.lifetimeUsageRemaining ?? 1);
+    const remainingMonthlyUsages = Number(res?.remainingMonthlyUsages ?? res?.monthlyUsageRemaining ?? 0);
+
+    return {
+      coupon: couponObj,
+      discountAmount,
+      finalPayableAmount,
+      remainingUserUsages,
+      remainingMonthlyUsages,
+      isValid: true,
+      couponId: couponObj.id,
+      code: couponObj.code,
+      name: couponObj.name,
+      discountType: couponObj.discount_type,
+      discountValue:
+        typeof couponObj.discount_value === "number"
+          ? couponObj.discount_value
+          : Number(couponObj.discount_value || 0),
+      monthlyUsageRemaining: remainingMonthlyUsages,
+      lifetimeUsageRemaining: remainingUserUsages,
+      message: res?.message || "Coupon is valid and applicable",
+    };
   }
 
   /**
-   * 4. POST /api/v1/coupons/apply
-   * Apply Coupon (Redeem on Checkout)
+   * 4. POST /api/v1/coupons/apply (Step 2: Apply & Lock Coupon at Checkout / Order Placement)
+   * Locks the redemption and increments usage counters.
    */
-  async applyCoupon(payload: RedeemCouponCheckoutPayload): Promise<{
-    success: boolean;
-    discountAmount: number;
-    finalPayableAmount: number;
-    message?: string;
-  }> {
-    return apiClient.post<{
-      success: boolean;
-      discountAmount: number;
-      finalPayableAmount: number;
-      message?: string;
-    }, RedeemCouponCheckoutPayload>(API_ENDPOINTS.COUPONS.APPLY, payload);
+  async applyCoupon(payload: RedeemCouponCheckoutPayload): Promise<ApplyCouponResult> {
+    const res = await apiClient.post<any, RedeemCouponCheckoutPayload>(
+      API_ENDPOINTS.COUPONS.APPLY,
+      payload
+    );
+
+    return {
+      usageId: res?.usageId || res?.id || "",
+      discountAmount: Number(res?.discountAmount ?? 0),
+      finalPayableAmount: Number(res?.finalPayableAmount ?? 0),
+      remainingUserUsages: Number(res?.remainingUserUsages ?? 0),
+      remainingMonthlyUsages: Number(res?.remainingMonthlyUsages ?? 0),
+      message: res?.message || "Coupon applied successfully",
+      success: true,
+    };
   }
 
   /**

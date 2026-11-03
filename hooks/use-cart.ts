@@ -42,6 +42,7 @@ import { getStoredAccessToken } from "@/lib/auth/token-storage";
 import { SITE_CONFIG } from "@/lib/constants/site-config";
 import { getOrCreateGuestSessionId } from "@/lib/api/cart-service";
 import { couponService } from "@/lib/api/coupon-service";
+import { CartItemCouponInput } from "@/types/coupon";
 import { markItemAsRemoved } from "@/queries/cart/use-cart-mutations";
 
 // Canonical key resolver so variantId, productId, and cartItemId all resolve to the same item
@@ -684,7 +685,8 @@ export function useCart() {
   }, [isAuthenticated, mergeMutation]);
 
   /**
-   * Apply Coupon to Cart
+   * Apply Coupon to Cart (Step 1: Validate Coupon in Cart - Preview Discount)
+   * Validates conditions and calculates discount without burning quota.
    */
   const applyCoupon = useCallback(
     async (code: string) => {
@@ -694,63 +696,87 @@ export function useCart() {
         return;
       }
 
-      // 1. Fetch live active coupons to validate minimum order value
-      let matchedCoupon: any = null;
-      try {
-        const { coupons } = await couponService.listActiveCoupons({ isActive: true });
-        matchedCoupon = coupons.find((c) => c.code.toUpperCase() === cleanCode);
-      } catch (err) {
-        console.warn("Coupon list validation warning:", err);
-      }
-
-      if (matchedCoupon) {
-        const minCart = Number(matchedCoupon.min_cart_amount || 0);
-        if (minCart > 0 && bill.itemTotal < minCart) {
-          toast.error(
-            `${matchedCoupon.code} requires a minimum order value of ₹${minCart}. Add ₹${minCart - bill.itemTotal} more to apply.`
-          );
-          return;
-        }
-      }
-
-      if (isAuthenticated) {
-        try {
-          await applyCouponMutation.mutateAsync(cleanCode);
-          toast.success(`Coupon "${cleanCode}" applied successfully!`);
-          return;
-        } catch (err: any) {
-          toast.error(err?.message || `Coupon "${cleanCode}" is invalid or expired`);
-          return;
-        }
-      }
-
-      // Guest / Direct API validation
-      if (!matchedCoupon) {
-        toast.error(`Invalid or inactive coupon code "${cleanCode}"`);
+      if (cartItems.length === 0) {
+        toast.error("Your cart is empty");
         return;
       }
 
-      let calculatedDiscount = 0;
-      if (matchedCoupon.discount_type === "PERCENTAGE") {
-        const raw = Math.round(bill.itemTotal * (Number(matchedCoupon.discount_value) / 100));
-        const max = matchedCoupon.max_discount_amount ? Number(matchedCoupon.max_discount_amount) : raw;
-        calculatedDiscount = Math.min(raw, max);
-      } else {
-        // FIXED_AMOUNT
-        const discountVal = Number(matchedCoupon.discount_value);
-        const maxVal = matchedCoupon.max_discount_amount ? Number(matchedCoupon.max_discount_amount) : discountVal;
-        calculatedDiscount = Math.min(discountVal, maxVal || discountVal);
-      }
+      const cartItemsPayload: CartItemCouponInput[] = cartItems.map((it) => ({
+        productId: it.productId,
+        quantity: it.quantity,
+        unitPrice: Number(it.price || 0),
+        ...(it.categoryId ? { categoryId: it.categoryId } : {}),
+        ...(it.variantId ? { variantId: it.variantId } : {}),
+      }));
 
-      setAppliedCoupon({
-        code: matchedCoupon.code,
-        discount: Math.max(1, calculatedDiscount),
-        description: matchedCoupon.description || `${matchedCoupon.name} applied`,
-        minCartAmount: Number(matchedCoupon.min_cart_amount || 0),
-      });
-      toast.success(`Coupon "${matchedCoupon.code}" applied! Saved ₹${calculatedDiscount}`);
+      try {
+        const validation = await couponService.validateCoupon({
+          code: cleanCode,
+          cartTotal: bill.itemTotal,
+          items: cartItemsPayload,
+        });
+
+        const couponRecord = validation.coupon;
+        const discount = Number(validation.discountAmount || 0);
+
+        setAppliedCoupon({
+          couponId: couponRecord?.id,
+          code: couponRecord?.code || cleanCode,
+          discount,
+          description: couponRecord?.name || `${cleanCode} applied`,
+          discountType: couponRecord?.discount_type,
+          discountValue: couponRecord?.discount_value,
+          remainingUserUsages: validation.remainingUserUsages,
+          remainingMonthlyUsages: validation.remainingMonthlyUsages,
+        });
+
+        toast.success(`Coupon "${couponRecord?.code || cleanCode}" applied! Saved ₹${discount}`);
+      } catch (err: any) {
+        // Fallback for guest or offline if matched coupon is available in list
+        let fallbackMatched: any = null;
+        try {
+          const { coupons } = await couponService.listActiveCoupons({ isActive: true });
+          fallbackMatched = coupons.find((c) => c.code.toUpperCase() === cleanCode);
+        } catch {
+          // ignore
+        }
+
+        if (fallbackMatched) {
+          const minCart = Number(fallbackMatched.min_cart_amount || 0);
+          if (minCart > 0 && bill.itemTotal < minCart) {
+            toast.error(
+              `${fallbackMatched.code} requires a minimum order value of ₹${minCart}. Add ₹${minCart - bill.itemTotal} more to apply.`
+            );
+            throw err;
+          }
+
+          let calculatedDiscount = 0;
+          if (fallbackMatched.discount_type === "PERCENTAGE") {
+            const raw = Math.round(bill.itemTotal * (Number(fallbackMatched.discount_value) / 100));
+            const max = fallbackMatched.max_discount_amount ? Number(fallbackMatched.max_discount_amount) : raw;
+            calculatedDiscount = Math.min(raw, max);
+          } else {
+            const discountVal = Number(fallbackMatched.discount_value);
+            const maxVal = fallbackMatched.max_discount_amount ? Number(fallbackMatched.max_discount_amount) : discountVal;
+            calculatedDiscount = Math.min(discountVal, maxVal || discountVal);
+          }
+
+          setAppliedCoupon({
+            couponId: fallbackMatched.id,
+            code: fallbackMatched.code,
+            discount: Math.max(1, calculatedDiscount),
+            description: fallbackMatched.description || `${fallbackMatched.name} applied`,
+            minCartAmount: Number(fallbackMatched.min_cart_amount || 0),
+          });
+          toast.success(`Coupon "${fallbackMatched.code}" applied! Saved ₹${calculatedDiscount}`);
+          return;
+        }
+
+        toast.error(err?.message || `Coupon "${cleanCode}" is invalid or cannot be applied`);
+        throw err;
+      }
     },
-    [isAuthenticated, bill, applyCouponMutation, setAppliedCoupon]
+    [cartItems, bill.itemTotal, setAppliedCoupon]
   );
 
   /**

@@ -123,7 +123,22 @@ export class CheckoutService {
   }
 
   /**
-   * 8. POST /api/v1/checkout/:id/payment-intent
+   * 8. POST /api/v1/checkout/:id/recalculate
+   * Recalculates checkout finances when cart, quantities, or coupons change.
+   */
+  async recalculate(checkoutId: string): Promise<CheckoutWithItems> {
+    const res = await apiClient.post<CheckoutWithItems | { data: CheckoutWithItems }>(
+      API_ENDPOINTS.CHECKOUT.RECALCULATE(checkoutId),
+      {}
+    );
+    if (res && "data" in res && (res as any).data) {
+      return (res as any).data;
+    }
+    return res as CheckoutWithItems;
+  }
+
+  /**
+   * 9. POST /api/v1/checkout/:id/payment-intent
    * Generates Razorpay Order payment intent.
    */
   async createPaymentIntent(

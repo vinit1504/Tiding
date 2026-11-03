@@ -8,7 +8,7 @@ import { userProfileAtom, authSessionAtom } from "@/stores";
 
 export function useSendEmailOtpMutation() {
   return useMutation({
-    mutationFn: (email: string) => authService.sendEmailOtp(email),
+    mutationFn: (email: string) => authService.sendEmailOtp(email.trim().toLowerCase()),
   });
 }
 
@@ -19,7 +19,7 @@ export function useVerifyEmailOtpMutation() {
 
   return useMutation({
     mutationFn: ({ email, otp }: { email: string; otp: string }) =>
-      authService.verifyEmailOtp(email, otp),
+      authService.verifyEmailOtp(email.trim().toLowerCase(), otp.trim()),
     onSuccess: (data) => {
       setUser(data.user);
       setSession({

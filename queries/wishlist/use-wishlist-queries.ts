@@ -46,21 +46,23 @@ export function useCustomerWishlistQuery(params: CustomerWishlistQuery = {}) {
         const vIds: string[] = [];
         const itemMap: Record<string, string> = {};
 
-        data.items.forEach((item) => {
-          if (item.productId) {
-            pIds.push(item.productId);
-            itemMap[item.productId] = item.id;
+        data.items.forEach((item: any) => {
+          const pId = item.productId || item.product_id || item.product?.id;
+          const vId = item.variantId || item.variant_id || item.variant?.id;
+          if (pId) {
+            pIds.push(String(pId));
+            itemMap[String(pId)] = item.id;
           }
-          if (item.variantId) {
-            vIds.push(item.variantId);
-            itemMap[item.variantId] = item.id;
+          if (vId) {
+            vIds.push(String(vId));
+            itemMap[String(vId)] = item.id;
           }
         });
 
         const distinctPIds = Array.from(new Set(pIds));
         setProductIds(distinctPIds);
         setVariantIds(Array.from(new Set(vIds)));
-        setItemMap(itemMap);
+        setItemMap((prev) => ({ ...prev, ...itemMap }));
         setServerCount(data.total ?? data.items.length);
       }
       return data;
@@ -126,7 +128,9 @@ export function useWishlistIdsQuery() {
 
       setProductIds(distinctPIds);
       setVariantIds(distinctVIds);
-      setItemMap(itemMap);
+      if (Object.keys(itemMap).length > 0) {
+        setItemMap((prev) => ({ ...prev, ...itemMap }));
+      }
       setServerCount(totalCount);
 
       return data;
