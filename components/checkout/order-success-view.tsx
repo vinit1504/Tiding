@@ -134,6 +134,9 @@ export function OrderSuccessView({ order }: OrderSuccessViewProps) {
             totalSavings={itemsTotalSavings}
             totalAmount={order.totalAmount}
             paymentMethod={order.paymentMethod}
+            orderId={order.orderId}
+            orderNumber={displayOrderNumber}
+            orderStatus={order.status}
           />
         </aside>
       </div>

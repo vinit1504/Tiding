@@ -81,6 +81,10 @@ export const API_ENDPOINTS = {
     DETAIL: (orderId: string) => `/orders/${orderId}`,
     CREATE: "/orders",
     CANCEL: (orderId: string) => `/orders/${orderId}/cancel`,
+    INVOICE: (orderId: string) => `/orders/${orderId}/invoice`,
+    INVOICE_PREVIEW: (orderId: string) => `/orders/${orderId}/invoice/preview`,
+    INVOICE_DOWNLOAD: (orderId: string) => `/orders/${orderId}/invoice/download`,
+    INVOICE_GENERATE: (orderId: string) => `/orders/${orderId}/invoice/generate`,
   },
   COUPONS: {
     LIST: "/coupons",

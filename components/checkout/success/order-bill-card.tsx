@@ -6,12 +6,17 @@ import { Receipt, CreditCard, Sparkles, Package, ChevronRight, Home, IndianRupee
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
 
+import { OrderInvoiceButton } from "./order-invoice-button";
+
 interface OrderBillCardProps {
   itemsSubtotal: number;
   handlingFee: number;
   totalSavings: number;
   totalAmount: number;
   paymentMethod: string;
+  orderId?: string;
+  orderNumber?: string;
+  orderStatus?: string;
 }
 
 export function OrderBillCard({
@@ -20,6 +25,9 @@ export function OrderBillCard({
   totalSavings,
   totalAmount,
   paymentMethod,
+  orderId,
+  orderNumber,
+  orderStatus,
 }: OrderBillCardProps) {
   return (
     <div className="space-y-4">
@@ -84,6 +92,15 @@ export function OrderBillCard({
             <Sparkles className="h-3.5 w-3.5" />
             <span>You saved {formatCurrency(totalSavings)} on this order!</span>
           </div>
+        )}
+
+        {/* Invoice Actions */}
+        {orderId && (
+          <OrderInvoiceButton
+            orderId={orderId}
+            orderNumber={orderNumber}
+            orderStatus={orderStatus}
+          />
         )}
       </div>
 

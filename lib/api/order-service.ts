@@ -12,6 +12,8 @@ export interface GetOrdersParams {
 }
 
 export class OrderService {
+  private inFlightOrdersRequests = new Map<string, Promise<BackendOrder[]>>();
+
   /**
    * POST /api/v1/orders
    * Create an order from active cart items
@@ -36,7 +38,7 @@ export class OrderService {
 
   /**
    * GET /api/v1/orders
-   * Fetch active orders with pagination and sorting
+   * Fetch active orders with pagination and sorting (with concurrency deduplication)
    */
   async getMyOrders(params?: GetOrdersParams): Promise<BackendOrder[]> {
     const searchParams = new URLSearchParams();
@@ -49,16 +51,31 @@ export class OrderService {
     }
 
     const endpoint = `${API_ENDPOINTS.ORDERS.LIST}?${searchParams.toString()}`;
-    const res = await apiClient.get<any>(endpoint, []);
 
-    // Support both wrapped array { data: [...] } and raw array [...]
-    if (Array.isArray(res)) {
-      return res as BackendOrder[];
+    // Return active in-flight request if already in progress for this endpoint
+    if (this.inFlightOrdersRequests.has(endpoint)) {
+      return this.inFlightOrdersRequests.get(endpoint)!;
     }
-    if (res && Array.isArray(res.data)) {
-      return res.data as BackendOrder[];
-    }
-    return [];
+
+    const requestPromise = (async () => {
+      try {
+        const res = await apiClient.get<any>(endpoint, []);
+
+        // Support both wrapped array { data: [...] } and raw array [...]
+        if (Array.isArray(res)) {
+          return res as BackendOrder[];
+        }
+        if (res && Array.isArray(res.data)) {
+          return res.data as BackendOrder[];
+        }
+        return [];
+      } finally {
+        this.inFlightOrdersRequests.delete(endpoint);
+      }
+    })();
+
+    this.inFlightOrdersRequests.set(endpoint, requestPromise);
+    return requestPromise;
   }
 
   /**

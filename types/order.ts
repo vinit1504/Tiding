@@ -90,6 +90,19 @@ export interface BackendOrder {
   updated_at?: string;
   deliveredAt?: string;
   delivered_at?: string;
+  pdf_url?: string | null;
+  pdfUrl?: string | null;
+  invoice_url?: string | null;
+  invoiceUrl?: string | null;
+  invoice_number?: string | null;
+  invoiceNumber?: string | null;
+  amount?: string | number;
+  date?: string;
+  time?: string;
+  placed_at?: string;
+  items_count?: number;
+  image_url?: string;
+  image?: string;
 }
 
 export interface OrderTrackingStep {

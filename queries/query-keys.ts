@@ -45,7 +45,13 @@ export const QUERY_KEYS = {
   },
   ORDERS: {
     ALL: ["orders"] as const,
-    LIST: (page = 1, limit = 20) => [...QUERY_KEYS.ORDERS.ALL, "list", { page, limit }] as const,
+    LIST: (paramsOrPage?: number | Record<string, unknown>, limit = 20) => {
+      if (typeof paramsOrPage === "object" && paramsOrPage !== null) {
+        return [...QUERY_KEYS.ORDERS.ALL, "list", paramsOrPage] as const;
+      }
+      const page = typeof paramsOrPage === "number" ? paramsOrPage : 1;
+      return [...QUERY_KEYS.ORDERS.ALL, "list", { page, limit }] as const;
+    },
     DETAIL: (orderId: string) => [...QUERY_KEYS.ORDERS.ALL, "detail", orderId] as const,
   },
   USER: {

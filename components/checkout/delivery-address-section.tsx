@@ -1,12 +1,22 @@
 "use client";
 
 import React, { useState } from "react";
-import { MapPin, Plus, CheckCircle2, Home, Briefcase, Phone, Pencil } from "lucide-react";
+import {
+  MapPin,
+  Plus,
+  CheckCircle2,
+  Home,
+  Briefcase,
+  Phone,
+  Pencil,
+  Navigation,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCustomerAddressesQuery } from "@/queries/customer/use-address-queries";
 import { AddAddressDialog } from "./add-address-dialog";
 import { useAtomValue } from "jotai";
 import { deliveryLocationAtom } from "@/stores";
+import { toast } from "sonner";
 
 export interface AddressCardData {
   id: string;
@@ -78,21 +88,61 @@ export function DeliveryAddressSection({
     }
   }, [selectedAddressId, savedAddresses, onSelectAddress]);
 
+  const [detectedCoords, setDetectedCoords] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
+
   const handleOpenAdd = () => {
     setAddressToEdit(null);
+    setDetectedCoords(null);
     setIsAddOpen(true);
+  };
+
+  const handleDetectLocation = () => {
+    if (typeof window === "undefined" || !navigator.geolocation) {
+      toast.error("Geolocation is not supported by your browser");
+      handleOpenAdd();
+      return;
+    }
+
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setIsLocating(false);
+        setDetectedCoords({
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+        });
+        setAddressToEdit(null);
+        setIsAddOpen(true);
+        toast.success("Location locked! Pinning your address...");
+      },
+      () => {
+        setIsLocating(false);
+        toast.info("Could not detect GPS. Please select location on map.");
+        handleOpenAdd();
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
   };
 
   const handleOpenEdit = (addr: AddressCardData, e: React.MouseEvent) => {
     e.stopPropagation();
     setAddressToEdit(addr);
+    setDetectedCoords(
+      addr.latitude && addr.longitude
+        ? { latitude: addr.latitude, longitude: addr.longitude }
+        : null
+    );
     setIsAddOpen(true);
   };
 
   return (
     <div className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-xs space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between pb-3 border-b border-[var(--border-light)]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-[var(--border-light)] gap-3">
         <div className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--primary-light)] text-[var(--primary)]">
             <MapPin className="h-4 w-4" />
@@ -107,16 +157,31 @@ export function DeliveryAddressSection({
           </div>
         </div>
 
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={handleOpenAdd}
-          className="h-8.5 px-3 rounded-xl border-[var(--primary)] text-[var(--primary)] hover:bg-[var(--primary-light)] text-xs font-normal gap-1.5 cursor-pointer shadow-2xs"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          <span>Add New</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Quick 1-tap Detect GPS Location */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleDetectLocation}
+            disabled={isLocating}
+            className="h-8.5 px-3 rounded-xl border-emerald-300 dark:border-emerald-700 bg-emerald-50/60 dark:bg-emerald-950/30 text-[#0c831f] hover:bg-emerald-100 text-xs font-normal gap-1.5 cursor-pointer shadow-2xs"
+          >
+            <Navigation className={`h-3.5 w-3.5 ${isLocating ? "animate-spin" : ""}`} />
+            <span>{isLocating ? "Locating..." : "Detect Location"}</span>
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleOpenAdd}
+            className="h-8.5 px-3 rounded-xl border-[var(--primary)] text-[var(--primary)] hover:bg-[var(--primary-light)] text-xs font-normal gap-1.5 cursor-pointer shadow-2xs"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span>Add New</span>
+          </Button>
+        </div>
       </div>
 
       {/* Selectable Cards Grid */}
@@ -202,12 +267,17 @@ export function DeliveryAddressSection({
         open={isAddOpen}
         onOpenChange={(isOpen) => {
           setIsAddOpen(isOpen);
-          if (!isOpen) setAddressToEdit(null);
+          if (!isOpen) {
+            setAddressToEdit(null);
+            setDetectedCoords(null);
+          }
         }}
         addressToEdit={addressToEdit}
+        initialCoordinates={detectedCoords}
         onAddressSaved={(saved) => {
           onSelectAddress(saved);
           setAddressToEdit(null);
+          setDetectedCoords(null);
         }}
         onAddressCreated={(created) => {
           onSelectAddress({
