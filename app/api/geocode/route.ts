@@ -89,7 +89,7 @@ function extractSocietyName(data: any): string {
   const stateDistrict = isCleanString(addr.state_district) ? addr.state_district.toLowerCase().trim() : "";
   const state = isCleanString(addr.state) ? addr.state.toLowerCase().trim() : "";
 
-  // Set of administrative or road strings that must NEVER be returned as a society
+  // Set of administrative or road strings that must NEVER be returned as a societyy
   const isNonSocietyArea = (val: string) => {
     const v = val.toLowerCase().trim();
     return (
