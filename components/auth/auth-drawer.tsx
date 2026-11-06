@@ -48,6 +48,7 @@ import { getUserDisplayInitials, getUserFirstName } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { authService } from "@/services/auth-service";
+import { useAuth } from "@/hooks/use-auth";
 import { cartService } from "@/lib/api/cart-service";
 
 const EMPTY_OTP = ["", "", "", "", "", ""];
@@ -153,16 +154,11 @@ export function AuthDrawer() {
     router.push(path);
   };
 
+  const { logout } = useAuth();
+
   // Handle Logout
   const handleLogout = async () => {
-    try {
-      await authService.logout();
-    } catch { }
-    setUser(null);
-    setSession({ user: null, token: null, isAuthenticated: false });
-    toast.success("Logged out successfully");
-    setIsOpen(false);
-    router.push("/");
+    await logout("/");
   };
 
   // Handle Send OTP
@@ -234,8 +230,11 @@ export function AuthDrawer() {
     }
   };
 
+  const isVerifyingRef = useRef(false);
+
   // Handle Verify OTP
   const executeVerifyOtp = async (codeToVerify?: string) => {
+    if (isVerifyingRef.current) return;
     const cleanOtp = (codeToVerify || otpDigits.join("")).trim();
 
     if (!cleanOtp || cleanOtp.length !== 6) {
@@ -243,6 +242,7 @@ export function AuthDrawer() {
       return;
     }
 
+    isVerifyingRef.current = true;
     setIsLoading(true);
     setHasError(false);
 
@@ -292,6 +292,7 @@ export function AuthDrawer() {
       setTimeout(() => setHasError(false), 600);
       toast.error(err?.message || "Invalid or expired verification code");
     } finally {
+      isVerifyingRef.current = false;
       setIsLoading(false);
     }
   };

@@ -27,7 +27,7 @@ export function useVerifyEmailOtpMutation() {
         token: data.accessToken,
         isAuthenticated: true,
       });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.USER.PROFILE() });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.USER.PROFILE(data.user?.id) });
     },
   });
 }

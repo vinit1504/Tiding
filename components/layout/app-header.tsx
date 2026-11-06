@@ -36,6 +36,7 @@ import {
 } from "@/lib/utils";
 import { useCustomerAddressesQuery } from "@/queries";
 import { useWishlist } from "@/hooks/use-wishlist";
+import { useAuth } from "@/hooks/use-auth";
 
 const SEARCH_PLACEHOLDERS = [
   "Search 'farm fresh tomatoes'...",
@@ -119,15 +120,10 @@ export function AppHeader() {
     return "Select delivery location";
   }, [location, defaultAddress]);
 
-  const handleLogout = () => {
-    setUser(null);
-    setSession({ user: null, token: null, isAuthenticated: false });
-    try {
-      localStorage.removeItem("tiding_user");
-      localStorage.removeItem("tiding_token");
-      localStorage.setItem("tiding_logged_out", "true");
-    } catch { }
-    toast.success("Logged out successfully");
+  const { logout } = useAuth();
+
+  const handleLogout = async () => {
+    await logout("/");
   };
 
   // Rotating search bar placeholder

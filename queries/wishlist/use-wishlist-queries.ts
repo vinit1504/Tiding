@@ -23,6 +23,8 @@ import {
   WishlistItem,
 } from "@/types/wishlist";
 import { toast } from "sonner";
+import { useCurrentUserId } from "@/hooks/use-auth";
+import { getStoredAccessToken } from "@/lib/auth/token-storage";
 
 // ======================== QUERIES ========================
 
@@ -30,6 +32,10 @@ import { toast } from "sonner";
  * 1. Location-Aware Customer Wishlist
  */
 export function useCustomerWishlistQuery(params: CustomerWishlistQuery = {}) {
+  const userId = useCurrentUserId();
+  const token = typeof window !== "undefined" ? getStoredAccessToken() : null;
+  const isAuthed = !!token && token !== "token_vinit_default" && !!userId;
+
   const setLoadedItems = useSetAtom(customerWishlistItemsAtom);
   const setProductIds = useSetAtom(wishlistProductIdsAtom);
   const setVariantIds = useSetAtom(wishlistVariantIdsAtom);
@@ -37,7 +43,7 @@ export function useCustomerWishlistQuery(params: CustomerWishlistQuery = {}) {
   const setServerCount = useSetAtom(wishlistServerCountAtom);
 
   return useQuery({
-    queryKey: QUERY_KEYS.WISHLISTS.CUSTOMER(params as Record<string, unknown>),
+    queryKey: QUERY_KEYS.WISHLISTS.CUSTOMER(userId, params as Record<string, unknown>),
     queryFn: async () => {
       const data = await wishlistService.getCustomerWishlist(params);
       if (data?.items) {
@@ -67,6 +73,7 @@ export function useCustomerWishlistQuery(params: CustomerWishlistQuery = {}) {
       }
       return data;
     },
+    enabled: isAuthed,
     staleTime: 1000 * 60 * 2, // 2 minutes
   });
 }
@@ -75,6 +82,10 @@ export function useCustomerWishlistQuery(params: CustomerWishlistQuery = {}) {
  * 2. Lightweight Heart Icons Sync IDs
  */
 export function useWishlistIdsQuery() {
+  const userId = useCurrentUserId();
+  const token = typeof window !== "undefined" ? getStoredAccessToken() : null;
+  const isAuthed = !!token && token !== "token_vinit_default" && !!userId;
+
   const setProductIds = useSetAtom(wishlistProductIdsAtom);
   const setVariantIds = useSetAtom(wishlistVariantIdsAtom);
   const setItemMap = useSetAtom(wishlistItemIdMapAtom);
@@ -82,7 +93,7 @@ export function useWishlistIdsQuery() {
   const setLoadedItems = useSetAtom(customerWishlistItemsAtom);
 
   return useQuery({
-    queryKey: QUERY_KEYS.WISHLISTS.IDS(),
+    queryKey: QUERY_KEYS.WISHLISTS.IDS(userId),
     queryFn: async () => {
       const data = await wishlistService.getWishlistIds();
 
@@ -135,6 +146,7 @@ export function useWishlistIdsQuery() {
 
       return data;
     },
+    enabled: isAuthed,
     staleTime: 1000 * 30, // 30 seconds
     refetchOnWindowFocus: true,
   });
@@ -144,9 +156,14 @@ export function useWishlistIdsQuery() {
  * 3. List My Wishlists
  */
 export function useMyWishlistsQuery() {
+  const userId = useCurrentUserId();
+  const token = typeof window !== "undefined" ? getStoredAccessToken() : null;
+  const isAuthed = !!token && token !== "token_vinit_default" && !!userId;
+
   return useQuery({
-    queryKey: QUERY_KEYS.WISHLISTS.MY(),
+    queryKey: QUERY_KEYS.WISHLISTS.MY(userId),
     queryFn: () => wishlistService.getMyWishlists(),
+    enabled: isAuthed,
     staleTime: 1000 * 60 * 5,
   });
 }
@@ -167,10 +184,14 @@ export function usePublicWishlistQuery(shareToken: string) {
  * Single Wishlist by ID
  */
 export function useWishlistDetailQuery(wishlistId: string) {
+  const userId = useCurrentUserId();
+  const token = typeof window !== "undefined" ? getStoredAccessToken() : null;
+  const isAuthed = !!token && token !== "token_vinit_default" && !!userId;
+
   return useQuery({
-    queryKey: QUERY_KEYS.WISHLISTS.DETAIL(wishlistId),
+    queryKey: QUERY_KEYS.WISHLISTS.DETAIL(wishlistId, userId),
     queryFn: () => wishlistService.getWishlistById(wishlistId),
-    enabled: !!wishlistId,
+    enabled: isAuthed && !!wishlistId,
   });
 }
 

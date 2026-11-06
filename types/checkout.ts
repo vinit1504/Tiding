@@ -106,6 +106,8 @@ export interface InitiateCheckoutDto {
   idempotencyKey?: string;
   storeId?: string;
   store_id?: string;
+  couponCode?: string;
+  coupon_code?: string;
 }
 
 export interface SelectAddressDto {

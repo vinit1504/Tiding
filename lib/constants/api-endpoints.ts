@@ -139,4 +139,9 @@ export const API_ENDPOINTS = {
   CMS: {
     BANNERS: "/cms/banners",
   },
+  STORES: {
+    DETAIL: (storeId: string) => `/stores/${storeId}`,
+    INVENTORY: (storeId: string) => `/stores/${storeId}/inventory`,
+    RESOLVE_DELIVERY: "/stores/resolve-delivery",
+  },
 } as const;

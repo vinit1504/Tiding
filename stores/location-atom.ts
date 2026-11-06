@@ -41,3 +41,6 @@ export const hasUserSetLocationAtom = atom<boolean>(false);
 
 // Boolean loading indicator during dark store resolution
 export const isLocatingStoreAtom = atom<boolean>(false);
+
+// Active dark store handling fee resolved dynamically from store settings
+export const storeHandlingFeeAtom = atom<number | null>(null);

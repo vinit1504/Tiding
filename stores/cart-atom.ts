@@ -2,6 +2,7 @@ import { atom } from "jotai";
 import { CartItem, BillBreakdown, CartSummaryResponse, CheckoutValidationResult } from "@/types/cart";
 import { CouponRecord } from "@/types/coupon";
 import { SITE_CONFIG } from "@/lib/constants/site-config";
+import { storeHandlingFeeAtom } from "./location-atom";
 
 // Server-safe initial cart state to guarantee SSR and hydration parity
 export const cartItemsAtom = atom<CartItem[]>([]);
@@ -192,7 +193,15 @@ export const billBreakdownAtom = atom<BillBreakdown>((get) => {
     deliveryFee = isFreeDelivery ? 0 : SITE_CONFIG.defaultDeliveryFee;
   }
 
-  const handlingFee = itemTotal > 0 ? SITE_CONFIG.handlingFee : 0;
+  const dynamicStoreFee = get(storeHandlingFeeAtom);
+  const resolvedHandlingFee =
+    dynamicStoreFee !== null
+      ? dynamicStoreFee
+      : server && typeof server.handling_fee !== "undefined"
+      ? Number(server.handling_fee)
+      : SITE_CONFIG.handlingFee;
+
+  const handlingFee = itemTotal > 0 ? resolvedHandlingFee : 0;
   const amountNeededForFreeDelivery = Math.max(0, freeDeliveryThreshold - itemTotal);
 
   // Strict Coupon validation against minimum order value

@@ -195,6 +195,7 @@ export default function CheckoutPage() {
       try {
         checkoutSession = await initiateCheckoutMutation.mutateAsync({
           storeId: location.darkStoreId,
+          couponCode: appliedCoupon?.code || undefined,
           notes: `${selectedInstruction}${customNotes ? ` - ${customNotes}` : ""}`,
         });
       } catch (err: any) {
@@ -381,8 +382,9 @@ export default function CheckoutPage() {
               console.warn("Verification warning:", err?.message || err);
             }
 
+            let completeResult: any = null;
             try {
-              await completeCheckoutMutation.mutateAsync({
+              completeResult = await completeCheckoutMutation.mutateAsync({
                 checkoutId,
                 dto: { paymentMethod: "RAZORPAY" },
               });
@@ -390,12 +392,19 @@ export default function CheckoutPage() {
               console.warn("Checkout completion notice:", err?.message || err);
             }
 
+            const finalizedOrder = completeResult?.order || completeResult?.data || completeResult;
+            const orderId = finalizedOrder?.id || checkoutId;
+            const orderNumber =
+              finalizedOrder?.order_number ||
+              finalizedOrder?.orderNumber ||
+              `TD-${Math.floor(100000 + Math.random() * 900000)}`;
+
             // Step 2: Apply & Lock Coupon (At Checkout / Order Placement)
             if (appliedCoupon?.couponId) {
               try {
                 await couponService.applyCoupon({
                   couponId: appliedCoupon.couponId,
-                  orderId: checkoutId,
+                  orderId,
                   cartTotal: bill.itemTotal,
                   items: cartItems.map((it) => ({
                     productId: it.productId,
@@ -409,8 +418,8 @@ export default function CheckoutPage() {
             }
 
             const orderDetails: PlacedOrderDetails = {
-              orderId: checkoutId,
-              orderNumber: `TD-${Math.floor(100000 + Math.random() * 900000)}`,
+              orderId,
+              orderNumber,
               paymentMethod: paymentMethod === "upi" ? "UPI (Razorpay)" : "Card / NetBanking",
               totalAmount: bill.grandTotal,
               items: [...cartItems],

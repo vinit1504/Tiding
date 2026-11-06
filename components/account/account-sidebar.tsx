@@ -24,6 +24,7 @@ import { authService } from "@/services/auth-service";
 import { toast } from "sonner";
 import { getUserDisplayInitials } from "@/lib/utils";
 import { useWishlist } from "@/hooks/use-wishlist";
+import { useAuth } from "@/hooks/use-auth";
 
 interface AccountSidebarProps {
   activeTab?:
@@ -42,9 +43,9 @@ interface AccountSidebarProps {
 export function AccountSidebar({ activeTab, className = "" }: AccountSidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const [user, setUser] = useAtom(userProfileAtom);
-  const [, setSession] = useAtom(authSessionAtom);
+  const [user] = useAtom(userProfileAtom);
   const { wishlistCount } = useWishlist();
+  const { logout } = useAuth();
 
   const userName = user?.name || user?.firstName || "Vinit";
   const displayContact = user?.phone || user?.email || "+91 75673 37686";
@@ -52,22 +53,7 @@ export function AccountSidebar({ activeTab, className = "" }: AccountSidebarProp
   const userInitial = user ? getUserDisplayInitials(user) : "V";
 
   const handleLogout = async () => {
-    try {
-      await authService.logout();
-    } catch {
-      // ignore
-    }
-    setUser(null);
-    setSession({ user: null, token: null, isAuthenticated: false });
-    try {
-      localStorage.removeItem("tiding_user");
-      localStorage.removeItem("tiding_token");
-      localStorage.setItem("tiding_logged_out", "true");
-    } catch {
-      // ignore
-    }
-    toast.success("Logged out successfully");
-    router.push("/");
+    await logout("/");
   };
 
   interface NavItem {

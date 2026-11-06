@@ -10,6 +10,7 @@ import {
   userProfileAtom,
   authSessionAtom,
   deduplicateCartItems,
+  storeHandlingFeeAtom,
 } from "@/stores";
 import { TanStackQueryProvider } from "./query-client-provider";
 import { ThemeProvider } from "./theme-provider";
@@ -17,6 +18,22 @@ import { JotaiClientProvider } from "./jotai-provider";
 import { Toaster } from "sonner";
 import { useMyCartQuery } from "@/queries/cart/use-cart-mutations";
 import { useMeQuery } from "@/queries/auth/use-me-query";
+import { useStoreDetailsQuery } from "@/queries/store/use-store-queries";
+
+function DarkStoreSync() {
+  const [location] = useAtom(deliveryLocationAtom);
+  const [, setStoreHandlingFee] = useAtom(storeHandlingFeeAtom);
+  const { data: storeDetails } = useStoreDetailsQuery(location?.darkStoreId);
+
+  useEffect(() => {
+    if (storeDetails?.settings?.handling_fee !== undefined) {
+      const fee = Number(storeDetails.settings.handling_fee || 0);
+      setStoreHandlingFee(fee);
+    }
+  }, [storeDetails, setStoreHandlingFee]);
+
+  return null;
+}
 
 function CartServerSync() {
   useMyCartQuery();
@@ -126,23 +143,55 @@ function StoreHydrator() {
       }
     } catch {}
 
-    const handleAuthExpired = () => {
+    const handleLocalLogout = () => {
       setUser(null);
       setSession({
         user: null,
         token: null,
         isAuthenticated: false,
       });
-      try {
-        localStorage.removeItem("tiding_user");
-        localStorage.removeItem("tiding_token");
-        localStorage.removeItem("tiding_refresh_token");
-      } catch {}
+    };
+
+    const handleAuthExpired = () => {
+      import("@/lib/auth/session-cleanup").then(({ clearAllUserSessionData }) => {
+        clearAllUserSessionData();
+      });
+    };
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "tiding_token" || e.key === "tiding_user") {
+        if (!e.newValue) {
+          // Token or user was removed in another tab
+          import("@/lib/auth/session-cleanup").then(({ clearAllUserSessionData }) => {
+            clearAllUserSessionData();
+          });
+        } else if (e.key === "tiding_token") {
+          // Switched account in another tab: clear queries and re-sync
+          import("@/lib/query-client").then(({ getQueryClient }) => {
+            const qc = getQueryClient();
+            qc.cancelQueries();
+            qc.clear();
+          });
+          const savedUser = localStorage.getItem("tiding_user");
+          const parsedUser = savedUser ? JSON.parse(savedUser) : null;
+          setUser(parsedUser);
+          setSession({
+            user: parsedUser,
+            token: e.newValue,
+            isAuthenticated: true,
+          });
+        }
+      }
     };
 
     window.addEventListener("tiding_auth_expired", handleAuthExpired);
+    window.addEventListener("tiding_auth_logout", handleLocalLogout);
+    window.addEventListener("storage", handleStorageChange);
+
     return () => {
       window.removeEventListener("tiding_auth_expired", handleAuthExpired);
+      window.removeEventListener("tiding_auth_logout", handleLocalLogout);
+      window.removeEventListener("storage", handleStorageChange);
     };
   }, [setLocation, setHasSetLocation, setCartItems, setSavedForLater, setUser, setSession]);
 
@@ -157,6 +206,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
         <TanStackQueryProvider>
           <AuthServerSync />
           <CartServerSync />
+          <DarkStoreSync />
           {children}
           <Toaster
             position="top-right"

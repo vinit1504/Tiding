@@ -9,6 +9,7 @@ import {
   CreateOrderPayload,
 } from "@/types/payment";
 import { getStoredAccessToken } from "@/lib/auth/token-storage";
+import { useCurrentUserId } from "@/hooks/use-auth";
 
 export function useCreatePaymentIntentMutation() {
   return useMutation({
@@ -41,11 +42,14 @@ export function useCreateOrderMutation() {
 }
 
 export function useMyPaymentsQuery() {
+  const userId = useCurrentUserId();
   const token = typeof window !== "undefined" ? getStoredAccessToken() : null;
+  const isAuthed = !!token && token !== "token_vinit_default" && !!userId;
+
   return useQuery({
-    queryKey: QUERY_KEYS.PAYMENTS.LIST(),
+    queryKey: QUERY_KEYS.PAYMENTS.LIST(userId),
     queryFn: () => paymentService.getMyPayments(),
-    enabled: !!token,
+    enabled: isAuthed,
     staleTime: 1000 * 60,
   });
 }

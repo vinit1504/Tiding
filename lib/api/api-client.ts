@@ -25,9 +25,25 @@ export interface RequestOptions<T = unknown> {
 class ApiClient {
   private baseUrl: string;
   private refreshPromise: Promise<string | null> | null = null;
+  private activeControllers: Set<AbortController> = new Set();
 
   constructor() {
     this.baseUrl = SITE_CONFIG.apiUrl;
+  }
+
+  /**
+   * Aborts all pending API requests immediately.
+   * Crucial for account switching and logout to prevent old-user data races.
+   */
+  public abortAll(): void {
+    for (const controller of this.activeControllers) {
+      try {
+        controller.abort();
+      } catch {
+        // ignore abort errors
+      }
+    }
+    this.activeControllers.clear();
   }
 
   private getDefaultHeaders(): Record<string, string> {
@@ -78,14 +94,24 @@ class ApiClient {
     };
 
     const controller = new AbortController();
+    this.activeControllers.add(controller);
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    // If caller provided their own signal, listen to it to abort our controller
+    if (init.signal) {
+      if (init.signal.aborted) {
+        controller.abort();
+      } else {
+        init.signal.addEventListener("abort", () => controller.abort(), { once: true });
+      }
+    }
 
     try {
       const res = await fetch(`${this.baseUrl}${endpoint}`, {
         ...init,
         headers,
         credentials: "include", // Required for cross-origin cookie authentication
-        signal: init.signal || controller.signal,
+        signal: controller.signal,
       });
       clearTimeout(timeoutId);
 
@@ -111,9 +137,11 @@ class ApiClient {
     } catch (err: any) {
       clearTimeout(timeoutId);
       if (err.name === "AbortError" || err?.message?.includes("aborted")) {
-        throw new ApiError("Request execution timed out. The server took too long to respond.", 504);
+        throw new ApiError("Request execution timed out or was aborted.", 504);
       }
       throw err;
+    } finally {
+      this.activeControllers.delete(controller);
     }
   }
 

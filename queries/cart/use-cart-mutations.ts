@@ -21,6 +21,7 @@ import {
   CheckoutValidationResult,
 } from "@/types/cart";
 import { getStoredAccessToken } from "@/lib/auth/token-storage";
+import { useCurrentUserId } from "@/hooks/use-auth";
 
 export const recentlyRemovedItemIds = new Set<string>();
 
@@ -75,10 +76,12 @@ export function useMyCartQuery() {
   const setSavedForLater = useSetAtom(persistentSavedForLaterAtom);
   const setServerSummary = useSetAtom(serverCartSummaryAtom);
   const setAppliedCoupon = useSetAtom(appliedCouponAtom);
+  const userId = useCurrentUserId();
   const token = typeof window !== "undefined" ? getStoredAccessToken() : null;
+  const isAuthed = !!token && token !== "token_vinit_default" && !!userId;
 
   return useQuery({
-    queryKey: QUERY_KEYS.CART.DETAIL(),
+    queryKey: QUERY_KEYS.CART.DETAIL(userId),
     queryFn: async () => {
       const summary = await cartService.getMyCart();
       if (summary) {
@@ -138,11 +141,10 @@ export function useMyCartQuery() {
       }
       return summary;
     },
-    enabled: !!token && token !== "token_vinit_default",
-    staleTime: Infinity,
+    enabled: isAuthed,
+    staleTime: 1000 * 30, // 30 seconds
     refetchOnWindowFocus: false,
-    refetchOnMount: false,
-    refetchOnReconnect: false,
+    refetchOnMount: true,
   });
 }
 

@@ -11,13 +11,17 @@ import {
   VerifyPaymentDto,
 } from "@/types/checkout";
 import { getStoredAccessToken } from "@/lib/auth/token-storage";
+import { useCurrentUserId } from "@/hooks/use-auth";
 
 export function useActiveCheckoutQuery() {
+  const userId = useCurrentUserId();
   const token = typeof window !== "undefined" ? getStoredAccessToken() : null;
+  const isAuthed = !!token && token !== "token_vinit_default" && !!userId;
+
   return useQuery({
-    queryKey: QUERY_KEYS.CHECKOUT.ACTIVE(),
+    queryKey: QUERY_KEYS.CHECKOUT.ACTIVE(userId),
     queryFn: () => checkoutService.getActiveCheckout(),
-    enabled: !!token,
+    enabled: isAuthed,
     staleTime: 1000 * 30,
   });
 }

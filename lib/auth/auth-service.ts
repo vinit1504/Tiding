@@ -8,6 +8,7 @@ import {
   clearStoredAuth,
   setStoredUser,
 } from "./token-storage";
+import { clearAllUserSessionData, prepareForNewUserSession } from "./session-cleanup";
 
 export interface AuthTokens {
   accessToken: string;
@@ -153,6 +154,8 @@ export class AuthService {
       throw new Error(json?.message || "Invalid credentials");
     }
     const data = json.data;
+    // Clear any previous user's cached queries and in-flight calls before initializing new session
+    prepareForNewUserSession();
     this.setTokens({
       accessToken: data.accessToken,
       refreshToken: data.refreshToken,
@@ -209,6 +212,8 @@ export class AuthService {
     }
 
     const data = json.data;
+    // Clear any previous user's cached queries and in-flight calls before initializing new session
+    prepareForNewUserSession();
     this.setTokens({
       accessToken: data.accessToken,
       refreshToken: data.refreshToken,
@@ -266,6 +271,8 @@ export class AuthService {
       throw new Error(json?.message || "Invalid OTP code");
     }
     const data = json.data;
+    // Clear any previous user's cached queries and in-flight calls before initializing new session
+    prepareForNewUserSession();
     this.setTokens({
       accessToken: data.accessToken,
       refreshToken: data.refreshToken,
@@ -346,7 +353,7 @@ export class AuthService {
         console.warn("Server logout call failed:", err);
       }
     }
-    this.clearAuth();
+    clearAllUserSessionData();
   }
 
   /**

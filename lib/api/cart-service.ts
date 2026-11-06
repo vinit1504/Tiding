@@ -70,8 +70,15 @@ export function normalizeBackendCartItem(item: BackendCartItem): CartItem {
 
 export function parseCartSummaryToBreakdown(
   summary: CartSummaryResponse,
-  handlingFee: number = SITE_CONFIG.handlingFee
+  handlingFee?: number
 ): BillBreakdown {
+  const resolvedHandlingFee =
+    typeof handlingFee === "number"
+      ? handlingFee
+      : typeof summary.handling_fee !== "undefined"
+      ? Number(summary.handling_fee)
+      : SITE_CONFIG.handlingFee;
+
   const itemTotal = Number(summary.subtotal || 0);
   const deliveryFee = Number(summary.shipping_total || 0);
   const couponDiscount = Number(summary.discount_total || 0);
@@ -94,14 +101,16 @@ export function parseCartSummaryToBreakdown(
   if (mrpTotal < itemTotal) mrpTotal = itemTotal;
 
   const discountTotal = Math.max(0, mrpTotal - itemTotal + couponDiscount);
-  const grandTotal = Number(summary.grand_total) || itemTotal + deliveryFee + (itemTotal > 0 ? handlingFee : 0) - couponDiscount;
+  const grandTotal =
+    Number(summary.grand_total) ||
+    itemTotal + deliveryFee + (itemTotal > 0 ? resolvedHandlingFee : 0) - couponDiscount;
 
   return {
     itemTotal,
     mrpTotal,
     discountTotal,
     deliveryFee,
-    handlingFee: itemTotal > 0 ? handlingFee : 0,
+    handlingFee: itemTotal > 0 ? resolvedHandlingFee : 0,
     tipAmount: 0,
     couponDiscount,
     couponCode: summary.coupon_code || null,

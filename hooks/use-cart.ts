@@ -730,6 +730,15 @@ export function useCart() {
           remainingMonthlyUsages: validation.remainingMonthlyUsages,
         });
 
+        // If authenticated, persist coupon to backend active cart (POST /api/v1/cart/apply-coupon)
+        if (isAuthenticated) {
+          try {
+            await applyCouponMutation.mutateAsync(cleanCode);
+          } catch (persistErr: any) {
+            console.warn("Server cart coupon persistence warning:", persistErr);
+          }
+        }
+
         toast.success(`Coupon "${couponRecord?.code || cleanCode}" applied! Saved ₹${discount}`);
       } catch (err: any) {
         // Fallback for guest or offline if matched coupon is available in list

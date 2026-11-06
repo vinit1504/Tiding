@@ -36,61 +36,75 @@ export const QUERY_KEYS = {
   },
   CART: {
     ALL: ["cart"] as const,
-    DETAIL: () => [...QUERY_KEYS.CART.ALL, "detail"] as const,
+    DETAIL: (userId?: string | null) => [...QUERY_KEYS.CART.ALL, userId || "guest", "detail"] as const,
   },
   CHECKOUT: {
     ALL: ["checkout"] as const,
-    ACTIVE: () => [...QUERY_KEYS.CHECKOUT.ALL, "active"] as const,
-    DETAIL: (checkoutId: string) => [...QUERY_KEYS.CHECKOUT.ALL, "detail", checkoutId] as const,
+    ACTIVE: (userId?: string | null) => [...QUERY_KEYS.CHECKOUT.ALL, userId || "guest", "active"] as const,
+    DETAIL: (checkoutId: string, userId?: string | null) =>
+      [...QUERY_KEYS.CHECKOUT.ALL, userId || "guest", "detail", checkoutId] as const,
   },
   ORDERS: {
     ALL: ["orders"] as const,
-    LIST: (paramsOrPage?: number | Record<string, unknown>, limit = 20) => {
+    USER: (userId?: string | null) => [...QUERY_KEYS.ORDERS.ALL, userId || "anonymous"] as const,
+    LIST: (userId?: string | null, paramsOrPage?: number | Record<string, unknown>, limit = 20) => {
+      const scope = userId || "anonymous";
       if (typeof paramsOrPage === "object" && paramsOrPage !== null) {
-        return [...QUERY_KEYS.ORDERS.ALL, "list", paramsOrPage] as const;
+        return [...QUERY_KEYS.ORDERS.ALL, scope, "list", paramsOrPage] as const;
       }
       const page = typeof paramsOrPage === "number" ? paramsOrPage : 1;
-      return [...QUERY_KEYS.ORDERS.ALL, "list", { page, limit }] as const;
+      return [...QUERY_KEYS.ORDERS.ALL, scope, "list", { page, limit }] as const;
     },
-    DETAIL: (orderId: string) => [...QUERY_KEYS.ORDERS.ALL, "detail", orderId] as const,
+    DETAIL: (orderId: string, userId?: string | null) =>
+      [...QUERY_KEYS.ORDERS.ALL, userId || "anonymous", "detail", orderId] as const,
+    TRACKING: (orderId: string, userId?: string | null) =>
+      ["tracking", "orders", userId || "anonymous", orderId, "events"] as const,
   },
   USER: {
     ALL: ["user"] as const,
-    PROFILE: () => [...QUERY_KEYS.USER.ALL, "profile"] as const,
-    ADDRESSES: () => [...QUERY_KEYS.USER.ALL, "addresses"] as const,
+    PROFILE: (userId?: string | null) => [...QUERY_KEYS.USER.ALL, userId || "guest", "profile"] as const,
+    ADDRESSES: (userId?: string | null) => [...QUERY_KEYS.USER.ALL, userId || "guest", "addresses"] as const,
   },
   AUTH: {
     ALL: ["auth"] as const,
-    SESSION: () => [...QUERY_KEYS.AUTH.ALL, "session"] as const,
-    SESSIONS: () => [...QUERY_KEYS.AUTH.ALL, "device-sessions"] as const,
+    SESSION: (userId?: string | null) => [...QUERY_KEYS.AUTH.ALL, userId || "guest", "session"] as const,
+    SESSIONS: (userId?: string | null) => [...QUERY_KEYS.AUTH.ALL, userId || "guest", "device-sessions"] as const,
   },
   COUPONS: {
     ALL: ["coupons"] as const,
     LIST: (params?: Record<string, unknown>) => [...QUERY_KEYS.COUPONS.ALL, "list", params] as const,
-    ELIGIBILITY: (couponId: string) => [...QUERY_KEYS.COUPONS.ALL, "eligibility", couponId] as const,
-    USAGES: (params?: Record<string, unknown>) => [...QUERY_KEYS.COUPONS.ALL, "usages", params] as const,
+    ELIGIBILITY: (couponId: string, userId?: string | null) =>
+      [...QUERY_KEYS.COUPONS.ALL, userId || "guest", "eligibility", couponId] as const,
+    USAGES: (userId?: string | null, params?: Record<string, unknown>) =>
+      [...QUERY_KEYS.COUPONS.ALL, userId || "guest", "usages", params] as const,
   },
   PAYMENTS: {
     ALL: ["payments"] as const,
-    LIST: () => [...QUERY_KEYS.PAYMENTS.ALL, "list"] as const,
+    LIST: (userId?: string | null) => [...QUERY_KEYS.PAYMENTS.ALL, userId || "guest", "list"] as const,
     DETAIL: (paymentId: string) => [...QUERY_KEYS.PAYMENTS.ALL, "detail", paymentId] as const,
   },
   WISHLISTS: {
     ALL: ["wishlists"] as const,
-    CUSTOMER: (params?: Record<string, unknown>) => [...QUERY_KEYS.WISHLISTS.ALL, "customer", params] as const,
-    IDS: () => [...QUERY_KEYS.WISHLISTS.ALL, "ids"] as const,
-    MY: () => [...QUERY_KEYS.WISHLISTS.ALL, "my"] as const,
-    DEFAULT: () => [...QUERY_KEYS.WISHLISTS.ALL, "default"] as const,
-    DETAIL: (id: string) => [...QUERY_KEYS.WISHLISTS.ALL, "detail", id] as const,
+    CUSTOMER: (userId?: string | null, params?: Record<string, unknown>) =>
+      [...QUERY_KEYS.WISHLISTS.ALL, userId || "guest", "customer", params] as const,
+    IDS: (userId?: string | null) => [...QUERY_KEYS.WISHLISTS.ALL, userId || "guest", "ids"] as const,
+    MY: (userId?: string | null) => [...QUERY_KEYS.WISHLISTS.ALL, userId || "guest", "my"] as const,
+    DEFAULT: (userId?: string | null) => [...QUERY_KEYS.WISHLISTS.ALL, userId || "guest", "default"] as const,
+    DETAIL: (id: string, userId?: string | null) =>
+      [...QUERY_KEYS.WISHLISTS.ALL, userId || "guest", "detail", id] as const,
     PUBLIC: (token: string) => [...QUERY_KEYS.WISHLISTS.ALL, "public", token] as const,
   },
   REVIEWS: {
     ALL: ["reviews"] as const,
     PRODUCT: (productId: string) => [...QUERY_KEYS.REVIEWS.ALL, "product", productId] as const,
-    MY: () => [...QUERY_KEYS.REVIEWS.ALL, "my"] as const,
+    MY: (userId?: string | null) => [...QUERY_KEYS.REVIEWS.ALL, userId || "guest", "my"] as const,
   },
   CMS: {
     ALL: ["cms"] as const,
     BANNERS: (filters?: Record<string, unknown>) => [...QUERY_KEYS.CMS.ALL, "banners", filters] as const,
+  },
+  STORES: {
+    ALL: ["stores"] as const,
+    DETAIL: (storeId: string) => [...QUERY_KEYS.STORES.ALL, "detail", storeId] as const,
   },
 } as const;
