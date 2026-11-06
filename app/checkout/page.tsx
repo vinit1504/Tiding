@@ -199,10 +199,19 @@ export default function CheckoutPage() {
           notes: `${selectedInstruction}${customNotes ? ` - ${customNotes}` : ""}`,
         });
       } catch (err: any) {
-        console.warn("Initiate checkout notice:", err?.message || err);
+        console.error("Initiate checkout failed:", err?.message || err);
+        toast.error(err?.message || "Failed to initialize checkout session with server. Please try again.");
+        setIsProcessing(false);
+        return;
       }
 
-      const checkoutId = checkoutSession?.id || `chk_${Date.now()}`;
+      if (!checkoutSession?.id) {
+        toast.error("Unable to create checkout session. Please try again.");
+        setIsProcessing(false);
+        return;
+      }
+
+      const checkoutId = checkoutSession.id;
       const deliverySlotLabel = "Instant Express Delivery (15-20 mins)";
 
       // Derive realistic user and store coordinates
@@ -232,11 +241,12 @@ export default function CheckoutPage() {
         }
 
         const finalizedOrder = completeResult?.order || completeResult;
-        const orderId = finalizedOrder?.id || checkoutId;
+        const realOrderUuid = finalizedOrder?.id || null;
+        const orderId = realOrderUuid || checkoutId;
         const orderNumber =
           finalizedOrder?.order_number ||
           finalizedOrder?.orderNumber ||
-          `TD-${Math.floor(100000 + Math.random() * 900000)}`;
+          (realOrderUuid ? undefined : `TD-${Math.floor(100000 + Math.random() * 900000)}`);
 
         // Step 2: Apply & Lock Coupon (At Checkout / Order Placement)
         if (appliedCoupon?.couponId) {
@@ -389,15 +399,20 @@ export default function CheckoutPage() {
                 dto: { paymentMethod: "RAZORPAY" },
               });
             } catch (err: any) {
-              console.warn("Checkout completion notice:", err?.message || err);
+              console.error("Checkout completion error:", err?.message || err);
+              toast.error(err?.message || "Failed to finalize order on server.");
             }
 
             const finalizedOrder = completeResult?.order || completeResult?.data || completeResult;
-            const orderId = finalizedOrder?.id || checkoutId;
+            const realOrderUuid = finalizedOrder?.id || null;
+            if (!realOrderUuid) {
+              console.warn("Server did not return order ID in completeCheckout response:", completeResult);
+            }
+            const orderId = realOrderUuid || checkoutId;
             const orderNumber =
               finalizedOrder?.order_number ||
               finalizedOrder?.orderNumber ||
-              `TD-${Math.floor(100000 + Math.random() * 900000)}`;
+              (realOrderUuid ? undefined : `TD-${Math.floor(100000 + Math.random() * 900000)}`);
 
             // Step 2: Apply & Lock Coupon (At Checkout / Order Placement)
             if (appliedCoupon?.couponId) {

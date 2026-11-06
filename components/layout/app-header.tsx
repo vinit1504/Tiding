@@ -407,14 +407,6 @@ export function AppHeader() {
                   ? "My Cart"
                   : `${displayCartCount} ${displayCartCount === 1 ? "item" : "items"}`}
               </span>
-              {displayCartTotal > 0 && (
-                <>
-                  <span className="opacity-60 text-xs">•</span>
-                  <span className="font-extrabold">
-                    {formatCurrency(displayCartTotal)}
-                  </span>
-                </>
-              )}
             </div>
           </Button>
         </div>
