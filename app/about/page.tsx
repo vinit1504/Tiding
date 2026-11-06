@@ -41,7 +41,7 @@ export default function AboutPage() {
           </div>
           <h2 className="text-sm font-bold text-[var(--text-primary)]">Express Dark Stores</h2>
           <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-            Our neighborhood fulfillment hubs hold the freshest daily inventory, automated for 2-minute order packing.
+            Our neighborhood fulfillment hubs hold the freshest daily inventory, automated for 2-minute order packing..
           </p>
         </div>
 
