@@ -25,14 +25,16 @@ export function OrderStatusTimeline({
   currentStatus = "OUT_FOR_DELIVERY",
   timelineEvents = [],
 }: OrderStatusTimelineProps) {
-  // Normalize current milestone index: 0=PLACED, 1=PACKED, 2=ASSIGNED, 3=OUT_FOR_DELIVERY, 4=DELIVERED
+  // Normalize current milestone index: 0=PLACED, 1=PACKED, 2=ASSIGNED/PICKED_UP, 3=ON_THE_WAY, 4=REACHED_GATE, 5=DELIVERED
   const statusUpper = (currentStatus || "OUT_FOR_DELIVERY").toUpperCase();
   const currentStepIndex =
     statusUpper === "DELIVERED"
+      ? 5
+      : statusUpper === "REACHED_GATE"
       ? 4
-      : statusUpper === "OUT_FOR_DELIVERY"
+      : statusUpper === "OUT_FOR_DELIVERY" || statusUpper === "ON_THE_WAY" || statusUpper === "IN_TRANSIT"
       ? 3
-      : statusUpper === "ASSIGNED" || statusUpper === "PICKED_UP"
+      : statusUpper === "ASSIGNED" || statusUpper === "ACCEPTED" || statusUpper === "PICKED_UP"
       ? 2
       : statusUpper === "PROCESSING" || statusUpper === "PACKED"
       ? 1
@@ -60,37 +62,48 @@ export function OrderStatusTimeline({
     {
       id: "placed",
       title: "Order placed",
-      note: findEventNote(["CONFIRMED", "PLACED", "ORDER_PLACED"]) || placedAt || "Just now",
+      note: findEventNote(["CONFIRMED", "PLACED", "ORDER_PLACED", "DELIVERY_CREATED"]) || placedAt || "Just now",
       status: getStepState(0),
       icon: CheckCircle2,
     },
     {
       id: "packed",
       title: "Packed at store",
-      note: findEventNote(["PROCESSING", "PACKED", "IN_PROCESS"]) || "Quality checked and sealed",
+      note: findEventNote(["PROCESSING", "PACKED", "IN_PROCESS", "ORDER_PROCESSING"]) || "Quality checked and sealed",
       status: getStepState(1),
       icon: Store,
     },
     {
       id: "assigned",
       title: "Picked up by delivery partner",
-      note: findEventNote(["ASSIGNED", "PICKED_UP"]) || `${riderName} has your order`,
+      note: findEventNote(["ASSIGNED", "PICKED_UP"]) || `${riderName} has picked up your package`,
       status: getStepState(2),
       icon: UserCheck,
     },
     {
       id: "out",
       title: "On the way",
-      note: findEventNote(["OUT_FOR_DELIVERY"]) || `${distanceKm} km away`,
+      note: findEventNote(["ON_THE_WAY", "OUT_FOR_DELIVERY", "IN_TRANSIT"]) || `${distanceKm} km away`,
       status: getStepState(3),
       icon: Bike,
     },
     {
-      id: "delivered",
-      title: "Delivered",
-      note: findEventNote(["DELIVERED"]) || (currentStepIndex === 4 ? "Delivered to your doorstep" : `Arriving in ~${etaMins} mins`),
+      id: "gate",
+      title: "Arrived at gate",
+      note:
+        findEventNote(["REACHED_GATE"]) ||
+        (currentStepIndex >= 4
+          ? "Rider arrived at gate • Check email for verification OTP"
+          : "Delivery partner arriving at gate"),
       status: getStepState(4),
       icon: Home,
+    },
+    {
+      id: "delivered",
+      title: "Delivered",
+      note: findEventNote(["DELIVERED"]) || (currentStepIndex === 5 ? "Delivered to your doorstep" : `Expected delivery in ~${etaMins} mins`),
+      status: getStepState(5),
+      icon: CheckCircle2,
     },
   ];
 

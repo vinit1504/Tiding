@@ -6,15 +6,43 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 interface DeliveryPartnerCardProps {
-  rider: {
+  rider?: {
     name: string;
-    rating: number;
-    vehicle: string;
+    rating?: number;
+    vehicle?: string;
     phone?: string;
-  };
+  } | null;
+  status?: string;
 }
 
-export function DeliveryPartnerCard({ rider }: DeliveryPartnerCardProps) {
+export function DeliveryPartnerCard({ rider, status }: DeliveryPartnerCardProps) {
+  if (!rider) {
+    const isOutForDelivery = status === "OUT_FOR_DELIVERY";
+    return (
+      <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5 bg-zinc-50/70 border-t border-[var(--border-light)]">
+        <div className="flex items-center gap-3.5">
+          <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-600 border border-amber-200/60">
+            <Bike className="h-5 w-5 animate-pulse" />
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-[var(--text-primary)]">
+              {isOutForDelivery ? "Assigning Delivery Partner..." : "Store Partner Packing Order"}
+            </h4>
+            <p className="text-xs text-[var(--text-secondary)]">
+              {isOutForDelivery
+                ? "A delivery executive is being assigned to your order."
+                : "Your items are being sanitized and packed fresh at the dark store."}
+            </p>
+          </div>
+        </div>
+        <div className="inline-flex items-center gap-1.5 self-start sm:self-auto px-3 py-1.5 rounded-full bg-amber-100/60 text-amber-800 text-xs font-semibold">
+          <span className="h-2 w-2 rounded-full bg-amber-500 animate-ping" />
+          <span>In Progress</span>
+        </div>
+      </div>
+    );
+  }
+
   const handleCallRider = () => {
     if (rider.phone) {
       window.location.href = `tel:${rider.phone}`;
@@ -42,15 +70,19 @@ export function DeliveryPartnerCard({ rider }: DeliveryPartnerCardProps) {
             <h3 className="truncate text-sm sm:text-base text-[var(--text-primary)] font-bold">
               {rider.name}
             </h3>
-            <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-800 ring-1 ring-amber-200">
-              <Star className="h-2.5 w-2.5 fill-amber-500 text-amber-500" />
-              <span>{rider.rating}</span>
-            </span>
+            {typeof rider.rating === "number" && (
+              <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-800 ring-1 ring-amber-200">
+                <Star className="h-2.5 w-2.5 fill-amber-500 text-amber-500" />
+                <span>{rider.rating}</span>
+              </span>
+            )}
           </div>
 
-          <p className="truncate text-xs text-[var(--text-secondary)]">
-            {rider.vehicle}
-          </p>
+          {rider.vehicle && (
+            <p className="truncate text-xs text-[var(--text-secondary)]">
+              {rider.vehicle}
+            </p>
+          )}
 
           <p className="mt-1 flex items-center gap-1 text-[11px] text-[var(--primary)]">
             <ShieldCheck className="h-3.5 w-3.5" />

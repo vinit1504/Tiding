@@ -91,6 +91,20 @@ export function useOrderTrackingEventsQuery(orderId?: string) {
   });
 }
 
+export function useOrderTrackingSummaryQuery(orderId?: string) {
+  const userId = useCurrentUserId();
+  const token = typeof window !== "undefined" ? getStoredAccessToken() : null;
+  const isAuthed = !!token && token !== "token_vinit_default" && !!userId;
+
+  return useQuery({
+    queryKey: ["tracking", "orders", userId || "anonymous", orderId || "", "summary"] as const,
+    queryFn: () => (orderId ? orderService.getOrderTrackingSummary(orderId) : Promise.resolve(null)),
+    enabled: isAuthed && !!orderId,
+    staleTime: 1000 * 8,
+    refetchInterval: 1000 * 12,
+  });
+}
+
 export function useUpdateOrderStatusMutation() {
   const queryClient = useQueryClient();
   const userId = useCurrentUserId();

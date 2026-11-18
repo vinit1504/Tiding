@@ -9,7 +9,10 @@ import { OrderStatusTimeline } from "./success/order-status-timeline";
 import { OrderDeliveryAddressCard } from "./success/order-delivery-address-card";
 import { OrderItemsCard } from "./success/order-items-card";
 import { OrderBillCard } from "./success/order-bill-card";
-import { useOrderTrackingEventsQuery } from "@/queries/order/use-order-queries";
+import {
+  useOrderTrackingEventsQuery,
+  useOrderTrackingSummaryQuery,
+} from "@/queries/order/use-order-queries";
 
 export interface PlacedOrderDetails {
   orderId: string;
@@ -34,7 +37,7 @@ export interface PlacedOrderDetails {
     rating?: number;
     vehicle?: string;
     phone?: string;
-  };
+  } | null;
 }
 
 interface OrderSuccessViewProps {
@@ -44,14 +47,22 @@ interface OrderSuccessViewProps {
 export function OrderSuccessView({ order }: OrderSuccessViewProps) {
   const progress = useRiderProgress();
   const { data: realEvents = [] } = useOrderTrackingEventsQuery(order.orderId);
+  const { data: trackingSummary } = useOrderTrackingSummaryQuery(order.orderId);
 
-  const rider = {
-    name: order.rider?.name ?? "Rajesh Kumar",
-    rating: order.rider?.rating ?? 4.9,
-    vehicle: order.rider?.vehicle ?? "Two-Wheeler • GJ-01-ET-4821",
-    phone: order.rider?.phone,
-  };
+  // Derive real assigned delivery partner from backend if available, or fallback gracefully
+  const backendPartner = trackingSummary?.assignedPartner;
+  const rider = backendPartner
+    ? {
+        name: backendPartner.name || "Assigned Partner",
+        rating: 4.9,
+        vehicle: backendPartner.vehicleType
+          ? `${backendPartner.vehicleType.toUpperCase()} Delivery Partner`
+          : "Delivery Partner",
+        phone: undefined,
+      }
+    : order.rider ?? null;
 
+  const currentLiveStatus = trackingSummary?.status || order.status || "CONFIRMED";
   const displayOrderNumber = order.orderNumber || order.orderId;
   const totalUnits = order.items.reduce((s, it) => s + (it.quantity || 1), 0);
 
@@ -69,7 +80,9 @@ export function OrderSuccessView({ order }: OrderSuccessViewProps) {
   // Live simulation values derived from rider progress
   const remaining = Math.max(0, 1 - progress);
   const distanceKm = (remaining * 2.8).toFixed(1);
-  const liveEta = Math.max(2, Math.round(remaining * (order.etaMinutes + 4)));
+  const liveEta =
+    trackingSummary?.orderTiming?.estimatedMinutesRemaining ??
+    Math.max(2, Math.round(remaining * (order.etaMinutes + 4)));
 
   return (
     <div className="min-h-screen bg-[var(--surface-secondary)] pb-12">
@@ -94,19 +107,19 @@ export function OrderSuccessView({ order }: OrderSuccessViewProps) {
               progress={progress}
               distanceKm={distanceKm}
               etaMins={liveEta}
-              riderName={rider.name.split(" ")[0]}
+              riderName={rider?.name ? rider.name.split(" ")[0] : "Delivery Partner"}
             />
 
-            <DeliveryPartnerCard rider={rider} />
+            <DeliveryPartnerCard rider={rider} status={currentLiveStatus} />
           </section>
 
           {/* Vertical Live Order Status Timeline */}
           <OrderStatusTimeline
             placedAt={order.placedAt}
-            riderName={rider.name.split(" ")[0]}
+            riderName={rider?.name ? rider.name.split(" ")[0] : "Delivery Partner"}
             distanceKm={distanceKm}
             etaMins={liveEta}
-            currentStatus={order.status || "OUT_FOR_DELIVERY"}
+            currentStatus={currentLiveStatus}
             timelineEvents={realEvents}
           />
 

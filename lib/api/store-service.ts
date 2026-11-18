@@ -10,15 +10,15 @@ export class StoreService {
   async getStoreDetails(storeId: string): Promise<StoreDetail | null> {
     if (!storeId) return null;
     try {
-      const res = await apiClient.get<StoreDetail | { data: StoreDetail }>(
-        API_ENDPOINTS.STORES.DETAIL(storeId)
+      const res = await apiClient.get<StoreDetail | { data: StoreDetail } | null>(
+        API_ENDPOINTS.STORES.DETAIL(storeId),
+        null
       );
-      if (res && "data" in res && (res as any).data) {
+      if (res && typeof res === "object" && "data" in res && (res as any).data) {
         return (res as any).data;
       }
-      return res as StoreDetail;
-    } catch (err) {
-      console.warn(`Failed to fetch store details for ${storeId}:`, err);
+      return (res as StoreDetail) || null;
+    } catch {
       return null;
     }
   }

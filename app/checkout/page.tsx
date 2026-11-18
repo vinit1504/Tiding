@@ -3,13 +3,13 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useAtomValue } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import { toast } from "sonner";
 import { ShoppingBag, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/hooks/use-cart";
 import { useAuth } from "@/hooks/use-auth";
-import { deliveryLocationAtom } from "@/stores";
+import { deliveryLocationAtom, persistentActiveOrderAtom } from "@/stores";
 import { loadRazorpayScript } from "@/lib/utils/razorpay";
 import { couponService } from "@/lib/api/coupon-service";
 import {
@@ -60,7 +60,7 @@ export default function CheckoutPage() {
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
-  const [placedOrder, setPlacedOrder] = useState<PlacedOrderDetails | null>(null);
+  const [placedOrder, setPlacedOrder] = useAtom(persistentActiveOrderAtom);
 
   // Mutations
   const initiateCheckoutMutation = useInitiateCheckoutMutation();

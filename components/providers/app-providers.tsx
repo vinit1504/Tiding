@@ -11,6 +11,7 @@ import {
   authSessionAtom,
   deduplicateCartItems,
   storeHandlingFeeAtom,
+  activeOrderAtom,
 } from "@/stores";
 import { TanStackQueryProvider } from "./query-client-provider";
 import { ThemeProvider } from "./theme-provider";
@@ -52,6 +53,7 @@ function StoreHydrator() {
   const [, setSavedForLater] = useAtom(savedForLaterItemsAtom);
   const [, setUser] = useAtom(userProfileAtom);
   const [, setSession] = useAtom(authSessionAtom);
+  const [, setActiveOrder] = useAtom(activeOrderAtom);
   const hasSyncedAuthRef = React.useRef(false);
 
   useEffect(() => {
@@ -83,6 +85,16 @@ function StoreHydrator() {
         setSavedForLater(deduped);
         if (Array.isArray(parsed) && deduped.length !== parsed.length) {
           localStorage.setItem("tiding_cart_saved_for_later", JSON.stringify(deduped));
+        }
+      }
+    } catch {}
+
+    try {
+      const savedActiveOrder = localStorage.getItem("tiding_active_placed_order");
+      if (savedActiveOrder) {
+        const parsed = JSON.parse(savedActiveOrder);
+        if (parsed && parsed.orderId) {
+          setActiveOrder(parsed);
         }
       }
     } catch {}

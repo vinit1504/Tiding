@@ -6,6 +6,7 @@ import { AppProviders } from "@/components/providers";
 import { AppHeader } from "@/components/layout/app-header";
 import { Footer } from "@/components/layout/footer";
 import { FloatingCartBar } from "@/components/layout/floating-cart-bar";
+import { ActiveOrderBottomBar } from "@/components/layout/active-order-bottom-bar";
 import { LocationModal } from "@/components/location/location-modal";
 import { CartDrawer } from "@/components/cart/cart-drawer";
 import { AuthDrawer } from "@/components/auth/auth-drawer";
@@ -91,6 +92,7 @@ export default function RootLayout({
           <Footer />
 
           {/* Global Floating Elements & Modals */}
+          <ActiveOrderBottomBar />
           <FloatingCartBar />
           <LocationModal />
           <CartDrawer />

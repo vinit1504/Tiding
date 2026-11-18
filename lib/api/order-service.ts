@@ -113,6 +113,22 @@ export class OrderService {
   }
 
   /**
+   * GET /api/v1/tracking/orders/:orderId
+   * Returns live tracking summary including assigned delivery partner and ETA
+   */
+  async getOrderTrackingSummary(orderId: string): Promise<any | null> {
+    try {
+      const res = await apiClient.get<any>(`/tracking/orders/${orderId}`);
+      if (res && "data" in res && res.data) {
+        return res.data;
+      }
+      return res || null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * PATCH /api/v1/orders/:orderId/status
    * Updates order status milestone (ADMIN / STORE STAFF)
    */

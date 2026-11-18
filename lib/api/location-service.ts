@@ -1,4 +1,4 @@
-import { SITE_CONFIG } from "@/lib/constants/site-config";
+import { apiClient } from "./api-client";
 import { API_ENDPOINTS } from "@/lib/constants/api-endpoints";
 import {
   CountryItem,
@@ -22,27 +22,6 @@ export interface StoreResolutionResult {
 }
 
 class LocationService {
-  private baseUrl: string;
-
-  constructor() {
-    this.baseUrl = SITE_CONFIG.apiUrl;
-  }
-
-  private getAuthHeaders(): Record<string, string> {
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-    if (typeof window !== "undefined") {
-      try {
-        const token = localStorage.getItem("tiding_token");
-        if (token && token !== "token_vinit_default") {
-          headers["Authorization"] = `Bearer ${token}`;
-        }
-      } catch {}
-    }
-    return headers;
-  }
-
   /**
    * 1. GET /api/v1/location/countries
    * List countries with pagination & active filter
@@ -60,17 +39,18 @@ class LocationService {
       if (params?.search) sp.set("search", params.search.trim());
       if (params?.is_active !== undefined) sp.set("is_active", String(params.is_active));
 
-      const res = await fetch(`${this.baseUrl}${API_ENDPOINTS.LOCATION.COUNTRIES}?${sp.toString()}`);
-      if (!res.ok) return [];
-      const json = await res.json().catch(() => null);
+      const endpoint = `${API_ENDPOINTS.LOCATION.COUNTRIES}?${sp.toString()}`;
+      const json: any = await apiClient.get(endpoint, []);
+      if (!json) return [];
 
+      if (Array.isArray(json)) return json;
       if (json?.data) {
         if (Array.isArray(json.data)) return json.data;
         if (Array.isArray(json.data.countries)) return json.data.countries;
       }
+      if (Array.isArray(json?.countries)) return json.countries;
       return [];
-    } catch (err) {
-      console.warn("getCountries error:", err);
+    } catch {
       return [];
     }
   }
@@ -94,17 +74,18 @@ class LocationService {
       if (params?.search) sp.set("search", params.search.trim());
       if (params?.is_active !== undefined) sp.set("is_active", String(params.is_active));
 
-      const res = await fetch(`${this.baseUrl}${API_ENDPOINTS.LOCATION.STATES}?${sp.toString()}`);
-      if (!res.ok) return [];
-      const json = await res.json().catch(() => null);
+      const endpoint = `${API_ENDPOINTS.LOCATION.STATES}?${sp.toString()}`;
+      const json: any = await apiClient.get(endpoint, []);
+      if (!json) return [];
 
+      if (Array.isArray(json)) return json;
       if (json?.data) {
         if (Array.isArray(json.data)) return json.data;
         if (Array.isArray(json.data.states)) return json.data.states;
       }
+      if (Array.isArray(json?.states)) return json.states;
       return [];
-    } catch (err) {
-      console.warn("getStates error:", err);
+    } catch {
       return [];
     }
   }
@@ -128,17 +109,18 @@ class LocationService {
       if (params?.search) sp.set("search", params.search.trim());
       if (params?.is_active !== undefined) sp.set("is_active", String(params.is_active));
 
-      const res = await fetch(`${this.baseUrl}${API_ENDPOINTS.LOCATION.CITIES}?${sp.toString()}`);
-      if (!res.ok) return [];
-      const json = await res.json().catch(() => null);
+      const endpoint = `${API_ENDPOINTS.LOCATION.CITIES}?${sp.toString()}`;
+      const json: any = await apiClient.get(endpoint, []);
+      if (!json) return [];
 
+      if (Array.isArray(json)) return json;
       if (json?.data) {
         if (Array.isArray(json.data)) return json.data;
         if (Array.isArray(json.data.cities)) return json.data.cities;
       }
+      if (Array.isArray(json?.cities)) return json.cities;
       return [];
-    } catch (err) {
-      console.warn("getCities error:", err);
+    } catch {
       return [];
     }
   }
@@ -162,17 +144,18 @@ class LocationService {
       if (params?.search) sp.set("search", params.search.trim());
       if (params?.is_active !== undefined) sp.set("is_active", String(params.is_active));
 
-      const res = await fetch(`${this.baseUrl}${API_ENDPOINTS.LOCATION.PINCODES}?${sp.toString()}`);
-      if (!res.ok) return [];
-      const json = await res.json().catch(() => null);
+      const endpoint = `${API_ENDPOINTS.LOCATION.PINCODES}?${sp.toString()}`;
+      const json: any = await apiClient.get(endpoint, []);
+      if (!json) return [];
 
+      if (Array.isArray(json)) return json;
       if (json?.data) {
         if (Array.isArray(json.data)) return json.data;
         if (Array.isArray(json.data.pincodes)) return json.data.pincodes;
       }
+      if (Array.isArray(json?.pincodes)) return json.pincodes;
       return [];
-    } catch (err) {
-      console.warn("getPincodes error:", err);
+    } catch {
       return [];
     }
   }
@@ -198,17 +181,18 @@ class LocationService {
       if (params?.search) sp.set("search", params.search.trim());
       if (params?.is_active !== undefined) sp.set("is_active", String(params.is_active));
 
-      const res = await fetch(`${this.baseUrl}${API_ENDPOINTS.LOCATION.AREAS}?${sp.toString()}`);
-      if (!res.ok) return [];
-      const json = await res.json().catch(() => null);
+      const endpoint = `${API_ENDPOINTS.LOCATION.AREAS}?${sp.toString()}`;
+      const json: any = await apiClient.get(endpoint, []);
+      if (!json) return [];
 
+      if (Array.isArray(json)) return json;
       if (json?.data) {
         if (Array.isArray(json.data)) return json.data;
         if (Array.isArray(json.data.areas)) return json.data.areas;
       }
+      if (Array.isArray(json?.areas)) return json.areas;
       return [];
-    } catch (err) {
-      console.warn("getAreas error:", err);
+    } catch {
       return [];
     }
   }
@@ -218,12 +202,10 @@ class LocationService {
    */
   async getAreaBySlug(slug: string): Promise<AreaItem | null> {
     try {
-      const res = await fetch(`${this.baseUrl}${API_ENDPOINTS.LOCATION.AREA_BY_SLUG(slug)}`);
-      if (!res.ok) return null;
-      const json = await res.json().catch(() => null);
+      const endpoint = API_ENDPOINTS.LOCATION.AREA_BY_SLUG(slug);
+      const json: any = await apiClient.get(endpoint, null);
       return json?.data || json || null;
-    } catch (err) {
-      console.warn("getAreaBySlug error:", err);
+    } catch {
       return null;
     }
   }
@@ -233,12 +215,10 @@ class LocationService {
    */
   async getAreaById(areaId: string): Promise<AreaItem | null> {
     try {
-      const res = await fetch(`${this.baseUrl}${API_ENDPOINTS.LOCATION.AREA(areaId)}`);
-      if (!res.ok) return null;
-      const json = await res.json().catch(() => null);
+      const endpoint = API_ENDPOINTS.LOCATION.AREA(areaId);
+      const json: any = await apiClient.get(endpoint, null);
       return json?.data || json || null;
-    } catch (err) {
-      console.warn("getAreaById error:", err);
+    } catch {
       return null;
     }
   }
@@ -249,26 +229,17 @@ class LocationService {
    */
   async resolveStoreByArea(areaId: string): Promise<StoreResolutionResult | null> {
     try {
-      const headers = this.getAuthHeaders();
-
       // Primary: POST /api/v1/location/resolve-store
-      let res = await fetch(`${this.baseUrl}${API_ENDPOINTS.LOCATION.RESOLVE_STORE}`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ area_id: areaId }),
-      });
-
-      // Fallback: POST /api/v1/stores/resolve-delivery if primary returns 404
-      if (!res.ok && res.status === 404) {
-        res = await fetch(`${this.baseUrl}/stores/resolve-delivery`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ area_id: areaId }),
-        });
+      let json: any = null;
+      try {
+        json = await apiClient.post(API_ENDPOINTS.LOCATION.RESOLVE_STORE, { area_id: areaId });
+      } catch (err: any) {
+        // Fallback: POST /api/v1/stores/resolve-delivery if primary fails/404s
+        if (err?.status === 404) {
+          json = await apiClient.post("/stores/resolve-delivery", { area_id: areaId }, null);
+        }
       }
 
-      if (!res.ok) return null;
-      const json = await res.json().catch(() => null);
       if (!json) return null;
 
       const data = json.data || json;
@@ -295,8 +266,7 @@ class LocationService {
         distanceKm: data.distanceKm || data.distance_km,
         raw: data,
       };
-    } catch (err) {
-      console.warn("Resolve store by area error:", err);
+    } catch {
       return null;
     }
   }
