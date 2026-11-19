@@ -7,6 +7,7 @@ import { useAtom } from "jotai";
 import { ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { selectedCategorySlugAtom } from "@/stores";
 import { useBannersQuery } from "@/queries";
+import { STATIC_PROMO_BANNERS } from "@/lib/constants/banners";
 import { CmsBanner } from "@/types/cms-banner";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -46,9 +47,12 @@ export function PromoCarousel() {
   const [, setSelectedCategory] = useAtom(selectedCategorySlugAtom);
 
   // Fetch active customer CMS banners directly from the backend API
-  const { data: banners = [], isLoading } = useBannersQuery({
+  const { data: apiBanners = [], isLoading } = useBannersQuery({
     placement: "HOME_HERO",
   });
+
+  // Guarantee high-converting banners: use API banners when available, fallback to static banners
+  const banners = apiBanners.length > 0 ? apiBanners : STATIC_PROMO_BANNERS;
 
   const [currentPage, setCurrentPage] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
