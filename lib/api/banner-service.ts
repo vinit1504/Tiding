@@ -1,5 +1,6 @@
 import { apiClient } from "./api-client";
 import { API_ENDPOINTS } from "@/lib/constants/api-endpoints";
+import { STATIC_PROMO_BANNERS } from "@/lib/constants/banners";
 import { CmsBanner, CmsBannerFilters } from "@/types/cms-banner";
 
 // Default vibrant luxury color palettes for banners without custom gradient
@@ -84,15 +85,20 @@ export class BannerService {
       }
 
       if (bannerList.length > 0) {
-        return bannerList
+        const filtered = bannerList
           .filter((b) => b.is_active !== false && (!b.status || b.status === "PUBLISHED"))
           .sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0))
           .map((item, idx) => this.normalizeBanner(item, idx));
+
+        if (filtered.length > 0) {
+          return filtered;
+        }
       }
 
-      return [];
+      // If database has no active banners for this placement, return curated static banners
+      return STATIC_PROMO_BANNERS;
     } catch {
-      return [];
+      return STATIC_PROMO_BANNERS;
     }
   }
 }
