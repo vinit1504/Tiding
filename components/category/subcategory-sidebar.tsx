@@ -89,6 +89,52 @@ function SubcategoryItemButton({
   );
 }
 
+export function SubcategorySidebarSkeleton({ className }: { className?: string }) {
+  return (
+    <aside
+      aria-label="Subcategories loading"
+      className={cn(
+        "w-[70px] sm:w-[78px] md:w-[86px] shrink-0 h-full border-r border-slate-200/70 dark:border-neutral-800 bg-slate-50/80 dark:bg-neutral-900/70 py-2.5 overflow-hidden select-none rounded-l-2xl",
+        className
+      )}
+    >
+      <div className="flex flex-col gap-1.5 pb-20">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div
+            key={i}
+            className={cn(
+              "relative flex flex-col items-center justify-center py-2 px-1 mx-1 rounded-xl",
+              i === 0
+                ? "bg-white dark:bg-neutral-800 shadow-xs"
+                : "opacity-75"
+            )}
+          >
+            {i === 0 && (
+              <span className="absolute left-0.5 top-1/2 -translate-y-1/2 h-5 w-1 rounded-full bg-[#18A818]/60" />
+            )}
+            <div
+              className={cn(
+                "h-9 w-9 sm:h-10 sm:w-10 rounded-xl animate-pulse p-1 flex items-center justify-center",
+                i === 0
+                  ? "bg-[#18A818]/15 border border-[#18A818]/25"
+                  : "bg-slate-200/80 dark:bg-neutral-800"
+              )}
+            />
+            <div
+              className={cn(
+                "mt-1.5 h-2 rounded-full animate-pulse",
+                i === 0
+                  ? "w-10 sm:w-12 bg-[#18A818]/30"
+                  : "w-8 sm:w-10 bg-slate-200/80 dark:bg-neutral-800"
+              )}
+            />
+          </div>
+        ))}
+      </div>
+    </aside>
+  );
+}
+
 export function SubcategorySidebar({
   subcategories,
   selectedSubcategoryId,
@@ -135,26 +181,12 @@ export function SubcategorySidebar({
     }
   };
 
-  if (isLoading && (!subcategories || subcategories.length === 0)) {
-    return (
-      <aside
-        className={cn(
-          "w-[68px] sm:w-[76px] md:w-[84px] shrink-0 h-full border-r border-slate-100 dark:border-neutral-800 bg-slate-50/60 dark:bg-neutral-900/60 py-3 space-y-3",
-          className
-        )}
-      >
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="flex flex-col items-center px-1 space-y-1.5">
-            <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl bg-[var(--surface-secondary)] animate-pulse" />
-            <div className="h-2 w-10 rounded bg-[var(--surface-secondary)] animate-pulse" />
-          </div>
-        ))}
-      </aside>
-    );
+  if ((isLoading || isFetchingNextPage) && (!subcategories || subcategories.length === 0)) {
+    return <SubcategorySidebarSkeleton className={className} />;
   }
 
   if (!subcategories || subcategories.length === 0) {
-    return null;
+    return <SubcategorySidebarSkeleton className={className} />;
   }
 
   return (

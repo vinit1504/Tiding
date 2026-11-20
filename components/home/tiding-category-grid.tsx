@@ -53,7 +53,6 @@ function CategoryTile({
 }) {
   const [hasError, setHasError] = useState(false);
   const fallback = getCategoryFallbackMeta(item.name, item.slug);
-  const bgColor = item.bgColor || fallback.bgColor || "#F4F6F8";
 
   const cleanImage = sanitizeImageUrl(item.image);
   const shouldShowImage = cleanImage && !hasError;
@@ -61,23 +60,17 @@ function CategoryTile({
   return (
     <Link
       href={`/category/${item.slug}`}
-      prefetch={index < 4}
+      prefetch={true}
       title={`Shop ${item.name}`}
       style={{ animationDelay: `${Math.min(index, 20) * 35}ms` }}
       className="tiding-tile-in group flex min-w-0 flex-col items-center text-center rounded-2xl outline-none cursor-pointer active:scale-95 transition-transform duration-150 focus-visible:ring-2 focus-visible:ring-[#18A818] focus-visible:ring-offset-2"
     >
-      {/* Image card */}
+      {/* Image card: White background matching the image background */}
       <div
-        style={{ backgroundColor: bgColor }}
-        className="relative aspect-square w-full overflow-hidden rounded-2xl p-2 sm:p-3 flex items-center justify-center
-                   ring-1 ring-black/5 shadow-[0_1px_2px_rgba(16,24,40,0.06)]
+        className="relative aspect-square w-full overflow-hidden rounded-2xl bg-white   p-1 sm:p-1.5 flex items-center justify-center
                    transition-all duration-300 ease-out
-                   group-hover:-translate-y-1 group-hover:shadow-[0_12px_24px_-8px_rgba(24,168,24,0.35)] group-hover:ring-[#18A818]/30"
+                   group-hover:-translate-y-1  "
       >
-        {/* Sheen + decorative blob */}
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/60 via-white/10 to-transparent" />
-        <div className="pointer-events-none absolute -right-4 -top-4 h-14 w-14 rounded-full bg-white/40 blur-[2px] transition-transform duration-500 group-hover:scale-150" />
-
         {shouldShowImage ? (
           <Image
             src={cleanImage}
@@ -85,12 +78,12 @@ function CategoryTile({
             fill
             priority={priority}
             sizes="(max-width: 640px) 25vw, (max-width: 1024px) 12vw, 10vw"
-            className="relative object-contain p-2.5 sm:p-3.5 drop-shadow-md transition-transform duration-500 ease-out group-hover:scale-110 group-hover:-rotate-2"
+            className="relative object-contain p-1 sm:p-1.5 transition-transform duration-300 ease-out group-hover:scale-110"
             onError={() => setHasError(true)}
           />
         ) : (
-          <div className="relative flex h-full w-full items-center justify-center select-none">
-            <span className="text-3xl sm:text-4xl drop-shadow-sm transition-transform duration-300 group-hover:scale-125 group-hover:-rotate-6">
+          <div className="relative flex h-full w-full items-center justify-center select-none bg-slate-50">
+            <span className="text-3xl sm:text-4xl  transition-transform duration-300 group-hover:scale-125">
               {item.emoji || fallback.emoji}
             </span>
           </div>
@@ -108,8 +101,8 @@ function CategoryTile({
 function CategorySkeleton() {
   return (
     <div className="flex flex-col items-center">
-      <div className="tiding-shimmer relative aspect-square w-full overflow-hidden rounded-2xl bg-slate-200/70" />
-      <div className="tiding-shimmer relative mt-2 h-3 w-3/4 overflow-hidden rounded-full bg-slate-200/70" />
+      <div className="tiding-shimmer relative aspect-square w-full overflow-hidden rounded-2xl bg-slate-100 " />
+      <div className="tiding-shimmer relative mt-2 h-3 w-3/4 overflow-hidden rounded-full bg-slate-100" />
     </div>
   );
 }
@@ -146,20 +139,17 @@ export function TidingCategoryGrid() {
       <style>{CATEGORY_GRID_STYLES}</style>
 
       <div className="mx-auto max-w-7xl px-3 sm:px-6">
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-b from-[#18A818]/[0.07] via-white to-white p-4 ring-1 ring-black/5 shadow-sm sm:p-6">
-          {/* Soft background glow */}
-          <div className="pointer-events-none absolute -left-16 -top-16 h-48 w-48 rounded-full bg-[#18A818]/10 blur-3xl" />
-
+        <div className="relative overflow-hidden rounded-3xl bg-white p-4   sm:p-6">
           {/* Header */}
           <div className="relative mb-4 flex items-center justify-between gap-3 sm:mb-6">
             <div className="flex min-w-0 items-center gap-3">
-              <span className="hidden h-10 w-1.5 rounded-full bg-gradient-to-b from-[#18A818] to-[#7ED957] sm:block" />
+              <span className="hidden h-10 w-1.5 rounded-full bg-[#18A818] sm:block" />
               <div className="min-w-0">
                 <h2 className="text-lg font-extrabold tracking-tight text-[var(--text-primary)] sm:text-2xl">
                   Shop by Category
                 </h2>
                 <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium text-[var(--text-muted)] sm:text-sm">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-[#18A818] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm shadow-[#18A818]/30 sm:text-[11px]">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[#18A818] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white  sm:text-[11px]">
                     <Zap className="h-3 w-3 fill-current" /> Express
                   </span>
                   <span className="truncate">Fresh essentials &amp; groceries delivered fast</span>
