@@ -18,6 +18,7 @@ import {
 import { toast } from "sonner";
 import {
   deliveryLocationAtom,
+  hasUserSetLocationAtom,
   isLocationModalOpenAtom,
   isCartDrawerOpenAtom,
   isAuthDrawerOpenAtom,
@@ -51,6 +52,7 @@ const SEARCH_PLACEHOLDERS = [
 export function AppHeader() {
   const router = useRouter();
   const location = useAtomValue(deliveryLocationAtom);
+  const hasUserSetLocation = useAtomValue(hasUserSetLocationAtom);
   const [, setIsLocationModalOpen] = useAtom(isLocationModalOpenAtom);
   const [, setIsCartDrawerOpen] = useAtom(isCartDrawerOpenAtom);
   const [, setIsAuthDrawerOpen] = useAtom(isAuthDrawerOpenAtom);
@@ -191,6 +193,12 @@ export function AppHeader() {
                     ? `Delivery in ${location.deliveryEtaMinutes || 8} mins`
                     : "Unavailable"}
                 </span>
+
+                {(!hasUserSetLocation && !(location as any)?.isConfirmed) && (
+                  <span className="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full font-semibold leading-tight">
+                    Unconfirmed
+                  </span>
+                )}
 
                 {((location as any)?.addressType || defaultAddress?.address_type) && (
                   <span className="hidden md:inline-block px-1.5 py-0.2 text-[9px] font-extrabold uppercase rounded bg-gray-100 text-gray-600 leading-tight">

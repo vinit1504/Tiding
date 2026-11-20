@@ -3,6 +3,7 @@ export * from "./catalog";
 export * from "./inventory";
 export * from "./location/use-geocode-query";
 export * from "./location/use-location-hierarchy-queries";
+export * from "./location/use-customer-locations-query";
 export * from "./auth/use-auth-mutations";
 export * from "./auth/use-me-query";
 export * from "./auth/use-session-queries";

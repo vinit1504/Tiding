@@ -34,6 +34,7 @@ import {
 import { locationService } from "@/lib/api/location-service";
 import { toast } from "sonner";
 import type { MapLocationResult } from "@/components/location/interactive-map";
+import { AccuracyIndicator } from "@/components/location/accuracy-indicator";
 
 // Dynamically import InteractiveMap (client-side Leaflet)
 const InteractiveMap = dynamic(
@@ -89,6 +90,7 @@ export function AddressModal({
   const [currentCoords, setCurrentCoords] = useState<{ latitude: number; longitude: number }>(
     detectedLocation?.coordinates || initialData?.coordinates || { latitude: 21.1702, longitude: 72.8311 }
   );
+  const [accuracy, setAccuracy] = useState<number>(detectedLocation?.accuracy || 25);
 
   // Dynamic Geographic Hierarchy State
   const [selectedCountryId, setSelectedCountryId] = useState<string>("");
@@ -297,6 +299,7 @@ export function AddressModal({
   const handleMapPinSelect = useCallback(
     (result: MapLocationResult) => {
       setCurrentCoords(result.coordinates);
+      if (result.accuracy) setAccuracy(result.accuracy);
       setSearchMapQuery(result.formattedAddress);
 
       if (result.society || result.area) {
@@ -438,13 +441,17 @@ export function AddressModal({
             </div>
 
             {/* Real Interactive Map Component with Marker Drag & Click to Pin */}
-            <div className="flex-1 w-full relative min-h-[340px] rounded-2xl overflow-hidden shadow-inner border border-neutral-200 dark:border-neutral-700">
+            <div className="flex-1 w-full relative min-h-[300px] rounded-2xl overflow-hidden shadow-inner border border-neutral-200 dark:border-neutral-700">
               <InteractiveMap
                 initialCoordinates={currentCoords}
+                accuracyMeters={accuracy}
                 onLocationSelect={handleMapPinSelect}
                 className="w-full h-full"
               />
             </div>
+
+            {/* Accuracy Indicator */}
+            <AccuracyIndicator accuracyMeters={accuracy} />
           </div>
 
           {/* Right Column: Enter Complete Address Form with Dynamic State / City / Pincode / Area */}

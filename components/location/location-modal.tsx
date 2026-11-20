@@ -1,27 +1,25 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useAtom } from "jotai";
 import { useRouter } from "next/navigation";
 import {
   MapPin,
   Navigation,
-  Home,
-  Briefcase,
   Loader2,
   Check,
-  Plus,
-  Bookmark,
-  Radio,
-  Zap,
-  AlertCircle,
-  ArrowRight,
   CheckCircle2,
+  AlertTriangle,
+  Home,
+  Briefcase,
+  Plus,
+  Zap,
+  Store,
+  Phone,
 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
@@ -34,28 +32,24 @@ import {
   userProfileAtom,
   authSessionAtom,
 } from "@/stores";
-import { DeliveryLocation, SavedAddress } from "@/types/location";
+import {
+  DeliveryLocation,
+  GeoCoordinates,
+  LocationSource,
+  ReverseGeocodeResult,
+  getAccuracyInfo,
+} from "@/types/location";
 import { CustomerAddress } from "@/types/address";
 import { useCustomerAddressesQuery, useCreateAddressMutation } from "@/queries";
 import { QUERY_KEYS } from "@/queries/query-keys";
 import { resolveDeliveryStoreApi, ResolvedStoreData } from "@/queries/location/use-geocode-query";
 import { useQueryClient } from "@tanstack/react-query";
-import { isUuid } from "@/lib/api/catalog-service";
 import { locationService } from "@/lib/api/location-service";
 import { toast } from "sonner";
 import { AddressModal } from "../account";
-
-type DetectionStep = "idle" | "gps" | "reverse" | "store" | "complete" | "error";
-
-interface DetectionStatus {
-  step: DetectionStep;
-  coords?: { latitude: number; longitude: number };
-  addressTitle?: string;
-  formattedAddress?: string;
-  storeName?: string;
-  etaMinutes?: number;
-  errorMessage?: string;
-}
+import { GoogleMapPicker } from "./google-map-picker";
+import { AccuracyIndicator } from "./accuracy-indicator";
+import { useCustomerGeolocation } from "@/hooks/use-customer-geolocation";
 
 export function LocationModal() {
   const router = useRouter();
@@ -68,19 +62,43 @@ export function LocationModal() {
   const [session] = useAtom(authSessionAtom);
   const [, setIsAuthDrawerOpen] = useAtom(isAuthDrawerOpenAtom);
 
-  const [isLocating, setIsLocating] = useState(false);
-  const [detectionStatus, setDetectionStatus] = useState<DetectionStatus>({ step: "idle" });
-  const [detectedLocationData, setDetectedLocationData] = useState<DeliveryLocation | null>(null);
+  // Active Map Coordinates & Accuracy
+  const [activeCoords, setActiveCoords] = useState<GeoCoordinates>(
+    currentLocation.coordinates || { latitude: 21.1702, longitude: 72.8311 }
+  );
+  const [activeAccuracy, setActiveAccuracy] = useState<number>(currentLocation.accuracy || 25);
+  const [activeSource, setActiveSource] = useState<LocationSource>(
+    currentLocation.locationSource || "manual_pin"
+  );
+
+  // Address Preview details retrieved dynamically from reverse geocoding
+  const [addressDetails, setAddressDetails] = useState<Partial<ReverseGeocodeResult>>({
+    fullAddress: currentLocation.formattedAddress || "",
+    street: currentLocation.street || currentLocation.houseNo || "",
+    road: currentLocation.road || "",
+    locality: currentLocation.locality || currentLocation.area || "",
+    area: currentLocation.area || "",
+    city: currentLocation.city || "",
+    state: currentLocation.state || "",
+    country: currentLocation.country || "India",
+    postalCode: currentLocation.postalCode || currentLocation.pincode || "",
+  });
+
+  const [isReverseGeocoding, setIsReverseGeocoding] = useState(false);
+  const [storeInfo, setStoreInfo] = useState<ResolvedStoreData | null>(null);
+  const [isConfirmingLocation, setIsConfirmingLocation] = useState(false);
+  const [viewMode, setViewMode] = useState<"map" | "saved">("map");
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
 
-  const createAddressMutation = useCreateAddressMutation();
+  // Hook for browser geolocation with exact options
+  const { isDetecting, detectLocation } = useCustomerGeolocation();
 
-  // Fetch real saved customer addresses from profile
+  const createAddressMutation = useCreateAddressMutation();
   const { data: serverSavedAddresses = [], isLoading: isLoadingAddresses } = useCustomerAddressesQuery();
   const isAuthenticated = !!user || session.isAuthenticated;
 
-  // Merge server addresses with local user profile addresses to ensure full offline & online coverage
-  const savedAddresses: CustomerAddress[] = React.useMemo(() => {
+  // Saved addresses list
+  const savedAddresses: CustomerAddress[] = useMemo(() => {
     if (serverSavedAddresses && serverSavedAddresses.length > 0) {
       return serverSavedAddresses;
     }
@@ -108,194 +126,246 @@ export function LocationModal() {
     return [];
   }, [serverSavedAddresses, user]);
 
-  // Handle GPS location detection & store resolution with proper multi-step progress flow
-  const handleDetectLocation = useCallback(() => {
-    if (typeof window === "undefined" || !navigator.geolocation) {
-      toast.error("Geolocation is not supported by your browser");
-      return;
+  // Synchronize when dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      if (currentLocation.coordinates) {
+        setActiveCoords(currentLocation.coordinates);
+      }
+      if (currentLocation.accuracy) {
+        setActiveAccuracy(currentLocation.accuracy);
+      }
+      if (currentLocation.locationSource) {
+        setActiveSource(currentLocation.locationSource);
+      }
+      setViewMode("map");
     }
+  }, [isOpen, currentLocation]);
 
-    setIsLocating(true);
-    setDetectionStatus({ step: "gps" });
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        let detected: DeliveryLocation | null = null;
-        let resolvedStore: ResolvedStoreData | null = null;
-
-        // Step 1 Complete: Coordinates locked
-        setDetectionStatus({
-          step: "reverse",
-          coords: { latitude, longitude },
-        });
-
+  // Dynamic Reverse Geocode function (never hardcodes addresses)
+  const fetchReverseGeocode = useCallback(
+    async (lat: number, lng: number) => {
+      setIsReverseGeocoding(true);
+      try {
+        const result = await locationService.reverseGeocode(lat, lng);
+        if (result) {
+          setAddressDetails({
+            fullAddress: result.fullAddress,
+            street: result.street,
+            road: result.road,
+            locality: result.locality,
+            area: result.area,
+            city: result.city,
+            state: result.state,
+            country: result.country,
+            postalCode: result.postalCode,
+            darkStoreName: result.darkStoreName,
+            deliveryEtaMinutes: result.deliveryEtaMinutes,
+            isServiceable: result.isServiceable,
+          });
+        }
+        // Resolve the serving dark store for real ETA / distance / serviceability
         try {
-          const [storeResult, geocodeRes] = await Promise.allSettled([
-            resolveDeliveryStoreApi({ latitude, longitude }),
-            fetch(`/api/geocode?action=reverse&lat=${latitude}&lng=${longitude}`).then((r) =>
-              r.ok ? r.json() : null
-            ),
-          ]);
-
-          if (storeResult.status === "fulfilled" && storeResult.value) {
-            resolvedStore = storeResult.value;
-          }
-
-          if (geocodeRes.status === "fulfilled" && geocodeRes.value) {
-            detected = geocodeRes.value;
-          }
-        } catch (apiErr) {
-          console.warn("Location or store resolve error:", apiErr);
+          const store = await resolveDeliveryStoreApi({ latitude: lat, longitude: lng });
+          setStoreInfo(store);
+        } catch {
+          setStoreInfo(null);
         }
+      } catch (err) {
+        console.warn("Reverse geocode failed:", err);
+      } finally {
+        setIsReverseGeocoding(false);
+      }
+    },
+    []
+  );
 
-        // Direct Nominatim fallback if reverse geocode had an issue
-        if (!detected) {
-          try {
-            const nomRes = await fetch(
-              `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&addressdetails=1`,
-              { headers: { Accept: "application/json" } }
-            );
-            if (nomRes.ok) {
-              const data = await nomRes.json();
-              const addr = data.address || {};
-              const soc =
-                addr.residential ||
-                addr.neighbourhood ||
-                addr.suburb ||
-                addr.road ||
-                addr.city_district ||
-                "Current Location";
+  // Trigger initial reverse geocoding if opened without full address
+  useEffect(() => {
+    if (isOpen && activeCoords.latitude && activeCoords.longitude && !addressDetails.fullAddress) {
+      fetchReverseGeocode(activeCoords.latitude, activeCoords.longitude);
+    }
+  }, [isOpen, activeCoords, addressDetails.fullAddress, fetchReverseGeocode]);
 
-              detected = {
-                area: soc,
-                society: soc,
-                city: addr.city || addr.town || "Surat",
-                state: addr.state || "Gujarat",
-                pincode: addr.postcode || "395007",
-                formattedAddress: data.display_name,
-                coordinates: { latitude, longitude },
-                deliveryEtaMinutes: 8,
-                isServiceable: true,
-              };
-            }
-          } catch (nomErr) {
-            console.warn("Direct reverse geocode error:", nomErr);
-          }
-        }
+  // Handle coordinates changed via Map (pin drag, click, search) with 400ms debounce
+  const handleCoordinatesChange = useCallback(
+    (newCoords: GeoCoordinates, source: LocationSource) => {
+      setActiveCoords(newCoords);
+      const effectiveSource: LocationSource =
+        source === "ip_location" ? "manual_map_selection" : source;
+      setActiveSource(effectiveSource);
 
-        // Ensure city is resolved (from formattedAddress or coordinates if empty)
-        let resolvedCity = detected?.city || "";
-        if (!resolvedCity && detected?.formattedAddress) {
-          if (/ahmedabad/i.test(detected.formattedAddress)) {
-            resolvedCity = "Ahmedabad";
-          } else if (/surat/i.test(detected.formattedAddress)) {
-            resolvedCity = "Surat";
-          }
-        }
-        if (!resolvedCity) {
-          resolvedCity = latitude > 22.2 ? "Ahmedabad" : "Surat";
-        }
+      if (
+        effectiveSource === "manual_pin" ||
+        effectiveSource === "manual_map_selection" ||
+        effectiveSource === "place_search"
+      ) {
+        setActiveAccuracy(15);
+      }
 
-        // Ensure 6-digit pincode is resolved if present in formattedAddress
-        let resolvedPincode = detected?.pincode || "";
-        if (!resolvedPincode && detected?.formattedAddress) {
-          const pinMatch = detected.formattedAddress.match(/\b([1-9][0-9]{5})\b/);
-          if (pinMatch) resolvedPincode = pinMatch[1];
-        }
-        if (!resolvedPincode) {
-          resolvedPincode = resolvedCity === "Ahmedabad" ? "380058" : "395007";
-        }
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      debounceTimerRef.current = setTimeout(() => {
+        fetchReverseGeocode(newCoords.latitude, newCoords.longitude);
+      }, 400);
+    },
+    [fetchReverseGeocode]
+  );
 
-        if (detected) {
-          detected.city = resolvedCity;
-          detected.pincode = resolvedPincode;
-        }
-
-        const areaName = detected?.society || detected?.area || "South Bopal";
-        const cityName = resolvedCity;
-
-        // Step 2 Complete: Reverse geocode resolved, now resolving store
-        setDetectionStatus({
-          step: "store",
-          coords: { latitude, longitude },
-          addressTitle: `${areaName}, ${cityName}`,
-          formattedAddress: detected?.formattedAddress,
+  // IP fallback if GPS is blocked or unavailable
+  const handleFallbackToIP = useCallback(async () => {
+    try {
+      const data = await locationService.ipLookup();
+      if (data) {
+        const coords = { latitude: data.latitude, longitude: data.longitude };
+        setActiveCoords(coords);
+        setActiveAccuracy(data.accuracy || 2500);
+        setActiveSource("ip_location");
+        setAddressDetails({
+          fullAddress: `${data.city}, ${data.region}`,
+          city: data.city,
+          state: data.region,
+          country: data.country || "India",
+          postalCode: data.postalCode,
+          street: undefined,
+          locality: undefined,
         });
+        toast.info(`We found you near ${data.city}. Please confirm your exact building on the map.`);
+      }
+    } catch {
+      toast.info("Please drag the pin to select your delivery location.");
+    }
+  }, []);
 
-        const storeName = resolvedStore?.storeName || detected?.darkStoreName || "Tiding Butcher's Choice & Coastal Fresh - Bopal";
-        const etaMinutes = resolvedStore?.deliveryEtaMinutes || detected?.deliveryEtaMinutes || 12;
-
-        const finalLocation: DeliveryLocation = detected
-          ? {
-              ...detected,
-              city: resolvedCity,
-              pincode: resolvedPincode,
-              coordinates: { latitude, longitude },
-              darkStoreId: resolvedStore?.storeId || detected.darkStoreId,
-              darkStoreName: storeName,
-              storeAddress: resolvedStore?.storeAddress || detected.storeAddress,
-              deliveryEtaMinutes: etaMinutes,
-              isServiceable: resolvedStore ? resolvedStore.isServiceable : true,
-              storeDistanceKm: resolvedStore?.distanceKm,
-            }
-          : {
-              area: areaName,
-              society: areaName,
-              city: resolvedCity,
-              state: "Gujarat",
-              pincode: resolvedPincode,
-              formattedAddress: `Current Location, ${areaName}, ${resolvedCity}, Gujarat`,
-              coordinates: { latitude, longitude },
-              deliveryEtaMinutes: 12,
-              isServiceable: true,
-              darkStoreName: storeName,
-            };
-
-        // Step 3 Complete: Dark store resolved and location ready
-        setDetectionStatus({
-          step: "complete",
-          coords: { latitude, longitude },
-          addressTitle: `${finalLocation.society || finalLocation.area}, ${finalLocation.city}`,
-          storeName: finalLocation.darkStoreName,
-          etaMinutes: finalLocation.deliveryEtaMinutes,
-        });
-
-        // 1. Store the detected location in the global persistent store
-        setCurrentLocation(finalLocation);
-        setHasUserSetLocation(true);
-        setDetectedLocationData(finalLocation);
-        queryClient.invalidateQueries({ queryKey: ["catalog"] });
-
-        // 2. Delightful brief pause to let the user see the complete verified flow, then automatically open Address Popup!
-        setTimeout(() => {
-          setIsLocating(false);
-          setDetectionStatus({ step: "idle" });
-          setIsOpen(false);
-          setIsAddressModalOpen(true);
-          toast.success("Location verified! Please enter your doorstep details to save.");
-        }, 750);
+  // Handle GPS detection button click with automatic IP fallback
+  const handleDetectGPS = useCallback(() => {
+    detectLocation({
+      onSuccess: (result) => {
+        const coords = { latitude: result.latitude, longitude: result.longitude };
+        setActiveCoords(coords);
+        setActiveAccuracy(result.accuracy);
+        setActiveSource(result.locationSource);
+        fetchReverseGeocode(coords.latitude, coords.longitude);
+        toast.success(`Location detected (±${result.accuracy}m). Please review the pin.`);
       },
-      (error) => {
-        setIsLocating(false);
-        let errorMsg = "Unable to retrieve GPS location. Please try again or select a saved address.";
-        if (error.code === error.PERMISSION_DENIED) {
-          errorMsg = "Location permission denied. Please allow location access in your browser.";
-        } else if (error.code === error.TIMEOUT) {
-          errorMsg = "Location request timed out. Please try again.";
-        }
-        setDetectionStatus({
-          step: "error",
-          errorMessage: errorMsg,
-        });
-        toast.error(errorMsg);
+      onError: () => {
+        // If GPS permission denied or times out, seamlessly fallback to IP lookup
+        handleFallbackToIP();
       },
-      { timeout: 12000, enableHighAccuracy: true, maximumAge: 0 }
-    );
-  }, [setCurrentLocation, setHasUserSetLocation, setIsOpen, queryClient]);
+    });
+  }, [detectLocation, fetchReverseGeocode, handleFallbackToIP]);
 
-  // Select an existing saved address from customer account
+  // Handle Confirm Delivery Location
+  const handleConfirmLocation = useCallback(async () => {
+    setIsConfirmingLocation(true);
+    try {
+      // 1. Backend Integration: POST /api/locations
+      await locationService.saveLocation({
+        latitude: activeCoords.latitude,
+        longitude: activeCoords.longitude,
+        accuracy: activeAccuracy,
+        locationSource: activeSource,
+        isUserConfirmed: true,
+        addressDetails,
+      });
+
+      // 2. Resolve dark store fulfillment
+      let resolvedStore: ResolvedStoreData | null = null;
+      try {
+        resolvedStore = await resolveDeliveryStoreApi({
+          latitude: activeCoords.latitude,
+          longitude: activeCoords.longitude,
+        });
+      } catch (err) {
+        console.warn("Resolve store notice:", err);
+      }
+
+      // 3. Construct Confirmed DeliveryLocation
+      const confirmedLocation: DeliveryLocation = {
+        ...currentLocation,
+        coordinates: activeCoords,
+        accuracy: activeAccuracy,
+        locationSource: activeSource,
+        formattedAddress: addressDetails.fullAddress || `${activeCoords.latitude.toFixed(4)}, ${activeCoords.longitude.toFixed(4)}`,
+        street: addressDetails.street,
+        road: addressDetails.road,
+        locality: addressDetails.locality,
+        area: addressDetails.area || addressDetails.locality || "Confirmed Location",
+        city: addressDetails.city || currentLocation.city || "",
+        state: addressDetails.state || currentLocation.state || "",
+        country: addressDetails.country || "India",
+        pincode: addressDetails.postalCode || currentLocation.pincode || "",
+        postalCode: addressDetails.postalCode,
+        darkStoreId: resolvedStore?.storeId || addressDetails.darkStoreId || currentLocation.darkStoreId,
+        darkStoreName: resolvedStore?.storeName || addressDetails.darkStoreName || currentLocation.darkStoreName || "Express Dark Store",
+        deliveryEtaMinutes: resolvedStore?.deliveryEtaMinutes || addressDetails.deliveryEtaMinutes || 10,
+        isServiceable: resolvedStore?.isServiceable ?? addressDetails.isServiceable ?? true,
+        storeDistanceKm: resolvedStore?.distanceKm,
+      };
+
+      // 4. Save to persistent atom & invalidate catalogs
+      setCurrentLocation(confirmedLocation);
+      setHasUserSetLocation(true);
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem(
+            "tiding_customer_location",
+            JSON.stringify({
+              latitude: activeCoords.latitude,
+              longitude: activeCoords.longitude,
+              accuracy: activeAccuracy,
+              locationSource: activeSource,
+              isConfirmed: true,
+              address: {
+                fullAddress: confirmedLocation.formattedAddress,
+                street: confirmedLocation.street,
+                locality: confirmedLocation.area,
+                city: confirmedLocation.city,
+                state: confirmedLocation.state,
+                country: confirmedLocation.country,
+                postalCode: confirmedLocation.pincode,
+                houseNo: confirmedLocation.houseNo,
+                landmark: confirmedLocation.landmark,
+              },
+            })
+          );
+        } catch { }
+      }
+      queryClient.invalidateQueries({ queryKey: ["catalog"] });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["store-inventory"] });
+
+      toast.success(
+        `Delivery location confirmed! Delivering to ${confirmedLocation.area || confirmedLocation.city}.`
+      );
+      setIsOpen(false);
+      router.refresh();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to confirm delivery location. Please try again.");
+    } finally {
+      setIsConfirmingLocation(false);
+    }
+  }, [
+    activeCoords,
+    activeAccuracy,
+    activeSource,
+    addressDetails,
+    currentLocation,
+    setCurrentLocation,
+    setHasUserSetLocation,
+    queryClient,
+    setIsOpen,
+    router,
+  ]);
+
+  // Select an existing saved address from profile
   const handleSelectSavedAddress = async (addr: CustomerAddress) => {
+    const lat = Number(addr.latitude) || activeCoords.latitude;
+    const lng = Number(addr.longitude) || activeCoords.longitude;
+
     const parts = [
       addr.address_line_1,
       addr.address_line_2,
@@ -304,598 +374,334 @@ export function LocationModal() {
       addr.city_name,
       addr.pincode,
     ].filter(Boolean);
-    const formattedAddress = parts.join(", ");
+    const formatted = parts.join(", ");
 
-    const areaName = addr.area_name || addr.address_line_2 || addr.address_line_1;
-    const societyName = addr.address_line_2 || addr.area_name || addr.address_line_1;
-
-    let updatedLocation: DeliveryLocation = {
+    const updatedLocation: DeliveryLocation = {
       id: addr.id,
       areaId: addr.area_id,
-      area: areaName,
+      area: addr.area_name || addr.address_line_2 || "Home",
       houseNo: addr.address_line_1,
-      society: societyName,
+      society: addr.address_line_2 || addr.area_name || "",
       landmark: addr.landmark || "",
-      city: addr.city_name || "Surat",
-      state: addr.state_name || "Gujarat",
-      pincode: addr.pincode || "395007",
-      formattedAddress,
-      coordinates: {
-        latitude: Number(addr.latitude) || 21.1702,
-        longitude: Number(addr.longitude) || 72.8311,
-      },
+      city: addr.city_name || "",
+      state: addr.state_name || "",
+      pincode: addr.pincode || "",
+      formattedAddress: formatted,
+      coordinates: { latitude: lat, longitude: lng },
+      accuracy: 10,
+      locationSource: "saved_address",
       deliveryEtaMinutes: 8,
       isServiceable: true,
+      addressType: addr.address_type,
+      savedAddressId: addr.id,
     };
-    (updatedLocation as any).addressType = addr.address_type;
-    (updatedLocation as any).savedAddressId = addr.id;
 
-    if (addr.area_id) {
-      try {
-        const resolvedStore = await resolveDeliveryStoreApi({ area_id: addr.area_id });
-        if (resolvedStore) {
-          updatedLocation = {
-            ...updatedLocation,
-            areaId: addr.area_id,
-            darkStoreId: resolvedStore.storeId || updatedLocation.darkStoreId,
-            darkStoreName: resolvedStore.storeName || updatedLocation.darkStoreName,
-            storeAddress: resolvedStore.storeAddress || updatedLocation.storeAddress,
-            deliveryEtaMinutes: resolvedStore.deliveryEtaMinutes || 8,
-            isServiceable: resolvedStore.isServiceable,
-            storeDistanceKm: resolvedStore.distanceKm,
-          };
-        }
-      } catch (err) {
-        console.warn("Resolve store by area error:", err);
-      }
-    } else if (addr.latitude && addr.longitude) {
-      try {
-        const resolvedStore = await resolveDeliveryStoreApi({
-          latitude: Number(addr.latitude),
-          longitude: Number(addr.longitude),
-        });
-        if (resolvedStore) {
-          updatedLocation = {
-            ...updatedLocation,
-            darkStoreId: resolvedStore.storeId || updatedLocation.darkStoreId,
-            darkStoreName: resolvedStore.storeName || updatedLocation.darkStoreName,
-            storeAddress: resolvedStore.storeAddress || updatedLocation.storeAddress,
-            deliveryEtaMinutes: resolvedStore.deliveryEtaMinutes || 8,
-            isServiceable: resolvedStore.isServiceable,
-            storeDistanceKm: resolvedStore.distanceKm,
-          };
-        }
-      } catch (err) {
-        console.warn("Resolve store by coords error:", err);
-      }
-    }
+    // Save to backend location log
+    await locationService.saveLocation({
+      latitude: lat,
+      longitude: lng,
+      accuracy: 10,
+      locationSource: "saved_address",
+      isUserConfirmed: true,
+    });
 
     setCurrentLocation(updatedLocation);
     setHasUserSetLocation(true);
     setIsOpen(false);
     queryClient.invalidateQueries({ queryKey: ["catalog"] });
+    toast.success(`Delivering to saved address (${updatedLocation.area})`);
     router.refresh();
-    toast.success(
-      `Delivering to ${addr.address_type === "HOME" ? "Home" : addr.address_type === "WORK" ? "Work" : "Saved Address"} (${updatedLocation.area})!`
-    );
   };
 
-  const handleAddNewAddress = () => {
-    setIsOpen(false);
-    setDetectedLocationData(currentLocation);
-    setIsAddressModalOpen(true);
-  };
+  // const accuracyData = getAccuracyInfo(activeAccuracy);
 
-  // Save the address in current user address and update global location
-  const handleSaveNewAddress = async (
-    data: Partial<SavedAddress> & { floor?: string; houseNo?: string }
-  ) => {
-    try {
-      const houseNumber = data.houseNo || data.addressLine?.split(",")[0]?.trim() || "House";
-      const fullAddressLine = [
-        houseNumber,
-        data.floor?.trim() ? `${data.floor.trim()} Floor` : "",
-        data.landmark?.trim(),
-      ]
-        .filter(Boolean)
-        .join(", ");
+  // Real delivery data (store lookup wins over geocode defaults)
+  const etaMinutes = storeInfo?.deliveryEtaMinutes ?? addressDetails.deliveryEtaMinutes;
+  const isServiceable = storeInfo?.isServiceable ?? addressDetails.isServiceable;
+  const storeName = storeInfo?.storeName ?? addressDetails.darkStoreName;
+  const storeDistanceKm = storeInfo?.distanceKm;
 
-      const selectedCoords = detectedLocationData?.coordinates || currentLocation.coordinates || {
-        latitude: 21.1702,
-        longitude: 72.8311,
-      };
+  const detailRows: { label: string; value?: string }[] = [
+    { label: "Street", value: [addressDetails.street, addressDetails.road].filter(Boolean).join(", ") },
+    { label: "Locality", value: addressDetails.locality || addressDetails.area },
+    { label: "City", value: addressDetails.city },
+    { label: "State", value: addressDetails.state },
+    { label: "PIN code", value: addressDetails.postalCode },
+  ].filter((row) => !!row.value);
 
-      let createdServerAddress: CustomerAddress | null = null;
-
-      // 1. If authenticated, persist to backend DB
-      if (isAuthenticated) {
-        try {
-          const resolved = await locationService.resolveHierarchyUuids({
-            areaId: data.areaId || detectedLocationData?.areaId || currentLocation.areaId,
-            cityId: data.cityId || (currentLocation as any)?.cityId,
-            stateId: data.stateId || (currentLocation as any)?.stateId,
-            countryId: data.countryId || (currentLocation as any)?.countryId,
-            pincodeId: data.pincodeId,
-            areaName: data.area || detectedLocationData?.area || currentLocation.area,
-            cityName: data.city || detectedLocationData?.city || currentLocation.city,
-            stateName: detectedLocationData?.state || currentLocation.state,
-          });
-
-          if (
-            isUuid(resolved.areaId) &&
-            isUuid(resolved.cityId) &&
-            isUuid(resolved.stateId) &&
-            isUuid(resolved.countryId)
-          ) {
-            createdServerAddress = await createAddressMutation.mutateAsync({
-              address_type: (data.type?.toUpperCase() === "WORK"
-                ? "WORK"
-                : data.type?.toUpperCase() === "OTHER"
-                ? "OTHER"
-                : "HOME") as any,
-              recipient_name: data.receiverName || user?.name || "Customer",
-              recipient_phone: data.receiverPhone || user?.phone || "9876543210",
-              address_line_1: houseNumber,
-              address_line_2: data.area || detectedLocationData?.area || null,
-              landmark: data.landmark || null,
-              area_id: resolved.areaId!,
-              city_id: resolved.cityId!,
-              state_id: resolved.stateId!,
-              country_id: resolved.countryId!,
-              pincode_id: isUuid(resolved.pincodeId) ? resolved.pincodeId : null,
-              latitude: String(selectedCoords.latitude),
-              longitude: String(selectedCoords.longitude),
-              is_default: savedAddresses.length === 0,
-            });
-          } else {
-            console.warn("Could not resolve valid UUIDs for backend address creation; saving locally:", resolved);
-          }
-        } catch (apiErr: any) {
-          console.warn("Backend address creation error (fallback to local state):", apiErr);
-          const errorMsg = apiErr?.message || "Could not sync address to server. Saved locally.";
-          toast.error(errorMsg);
-        }
-      }
-
-      // 2. Build SavedAddress record
-      const newAddressId = createdServerAddress?.id || `addr-${Date.now()}`;
-      const savedItem: SavedAddress = {
-        id: newAddressId,
-        type: (data.type?.toLowerCase() === "work" ? "work" : "home") as any,
-        title: data.title || (data.type?.toUpperCase() === "WORK" ? "Work" : "Home"),
-        addressLine: fullAddressLine || data.addressLine || houseNumber,
-        landmark: data.landmark || "",
-        area: data.area || detectedLocationData?.area || "",
-        city: data.city || detectedLocationData?.city || "",
-        pincode: data.pincode || detectedLocationData?.pincode || "",
-        areaId: data.areaId || detectedLocationData?.areaId,
-        cityId: data.cityId,
-        stateId: data.stateId,
-        countryId: data.countryId,
-        pincodeId: data.pincodeId,
-        coordinates: selectedCoords,
-        isDefault: savedAddresses.length === 0,
-        receiverName: data.receiverName || user?.name || "Customer",
-        receiverPhone: data.receiverPhone || user?.phone || "9876543210",
-      };
-
-      // 3. Update user profile state & localStorage
-      if (user) {
-        const existing = user.savedAddresses || [];
-        const updatedUser = {
-          ...user,
-          savedAddresses: [savedItem, ...existing.filter((a) => a.id !== newAddressId)],
-        };
-        setUser(updatedUser);
-        try {
-          localStorage.setItem("tiding_user", JSON.stringify(updatedUser));
-        } catch {}
-      }
-
-      // 4. Update the active DeliveryLocation so the app immediately delivers to this address
-      const finalLoc: DeliveryLocation = {
-        id: newAddressId,
-        areaId: detectedLocationData?.areaId || currentLocation.areaId,
-        houseNo: houseNumber,
-        society: data.area || detectedLocationData?.society || detectedLocationData?.area || "",
-        area: data.area || detectedLocationData?.area || "",
-        landmark: data.landmark || "",
-        city: data.city || detectedLocationData?.city || "Surat",
-        state: detectedLocationData?.state || "Gujarat",
-        pincode: data.pincode || detectedLocationData?.pincode || "395007",
-        formattedAddress: [fullAddressLine, data.area, data.city, data.pincode].filter(Boolean).join(", "),
-        coordinates: selectedCoords,
-        darkStoreId: detectedLocationData?.darkStoreId || currentLocation.darkStoreId,
-        darkStoreName: detectedLocationData?.darkStoreName || currentLocation.darkStoreName || "Tiding Express Store",
-        storeAddress: detectedLocationData?.storeAddress || currentLocation.storeAddress,
-        deliveryEtaMinutes: detectedLocationData?.deliveryEtaMinutes || currentLocation.deliveryEtaMinutes || 8,
-        isServiceable: true,
-      };
-      (finalLoc as any).addressType = data.type?.toUpperCase() || "HOME";
-      (finalLoc as any).savedAddressId = newAddressId;
-
-      setCurrentLocation(finalLoc);
-      setHasUserSetLocation(true);
-      setIsAddressModalOpen(false);
-      setIsOpen(false);
-      setDetectedLocationData(null);
-
-      // Invalidate queries so that Header, Saved Addresses, Account, etc. reflect the changes immediately
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.USER.ADDRESSES() });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.USER.PROFILE() });
-      queryClient.invalidateQueries({ queryKey: ["catalog"] });
-      router.refresh();
-
-      toast.success(
-        `Address saved! Delivering to ${finalLoc.houseNo || finalLoc.area} in ${finalLoc.deliveryEtaMinutes} mins`
-      );
-    } catch (err: any) {
-      console.warn("Save address notice:", err?.message || err);
-      toast.error("Failed to save delivery address.");
-    }
-  };
-
-  const handleLoginClick = () => {
-    setIsOpen(false);
-    setIsAuthDrawerOpen(true);
-  };
+  const tabClass = (active: boolean) =>
+    `flex-1 h-8 rounded-lg text-xs font-bold transition-all ${active
+      ? "bg-[#0c831f] text-white shadow-sm shadow-emerald-700/30"
+      : "text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
+    }`;
 
   return (
     <>
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="max-w-md p-0 overflow-hidden border-[var(--border)] bg-[var(--surface)] shadow-2xl rounded-2xl sm:rounded-3xl">
+        <DialogContent className="w-[calc(100%-1.5rem)] max-w-md p-0 gap-0 overflow-hidden border-[var(--border)] bg-[var(--surface)] shadow-2xl shadow-emerald-900/10 rounded-3xl max-h-[90vh] flex flex-col">
           {/* Header */}
-          <div className="p-4 sm:p-5 border-b border-[var(--border)] space-y-1 bg-[var(--surface)]">
-            <DialogHeader className="space-y-1">
-              <div className="flex items-center gap-2 text-[#0c831f]">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-[#0c831f]">
-                  <MapPin className="h-4 w-4" />
-                </div>
-                <DialogTitle className="text-base font-bold text-[var(--text-primary)]">
-                  Delivery Location
-                </DialogTitle>
+          <div className="px-4 pt-4 pb-3 shrink-0 bg-gradient-to-b from-emerald-50 to-transparent dark:from-emerald-950/30">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#16a02c] to-[#0c831f] text-white shadow-md shadow-emerald-700/30">
+                <MapPin className="h-5 w-5" />
               </div>
-              <DialogDescription className="text-xs text-[var(--text-secondary)]">
-                Detect your live location or pick from saved addresses
-              </DialogDescription>
-            </DialogHeader>
+              <div className="min-w-0">
+                <DialogTitle className="text-base font-extrabold tracking-tight text-[var(--text-primary)]">
+                  Choose delivery location
+                </DialogTitle>
+                <DialogDescription className="text-xs text-[var(--text-secondary)]">
+                  Where should we deliver?
+                </DialogDescription>
+              </div>
+            </div>
+
+            {savedAddresses.length > 0 && (
+              <div className="mt-3 flex gap-1 rounded-xl bg-white/80 dark:bg-neutral-800 p-1 ring-1 ring-black/5">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("map")}
+                  className={tabClass(viewMode === "map")}
+                >
+                  Map
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("saved")}
+                  className={tabClass(viewMode === "saved")}
+                >
+                  Saved ({savedAddresses.length})
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Modal Body */}
-          <div className="p-4 sm:p-5 space-y-4 max-h-[65vh] overflow-y-auto">
-            {/* Live GPS Detection Flow Progression View */}
-            {isLocating ? (
-              <div className="py-2 px-1 space-y-4 animate-in fade-in zoom-in-95 duration-200">
-                {/* Animated Radar Pulse Card */}
-                <div className="relative flex flex-col items-center justify-center p-6 rounded-2xl bg-gradient-to-b from-emerald-500/15 via-emerald-500/5 to-transparent border border-emerald-500/25 overflow-hidden text-center">
-                  <div className="relative flex items-center justify-center mb-3">
-                    <div className="absolute h-20 w-20 rounded-full bg-emerald-500/15 animate-ping" />
-                    <div className="absolute h-14 w-14 rounded-full bg-emerald-500/25 animate-pulse" />
-                    <div className="relative flex h-11 w-11 items-center justify-center rounded-full bg-[#0c831f] text-white shadow-lg shadow-emerald-600/30">
-                      <Navigation className="h-5 w-5 animate-pulse" />
-                    </div>
-                  </div>
+          {/* Body */}
+          <div className="flex-1 overflow-y-auto">
+            {viewMode === "map" ? (
+              <div className="px-4 pb-4 space-y-3">
+                {/* Map with floating locate button */}
+                <div className="relative w-full h-[230px] sm:h-[270px] rounded-3xl overflow-hidden border-4 border-white dark:border-neutral-800 ring-1 ring-black/10 shadow-lg shadow-emerald-900/10">
+                  <GoogleMapPicker
+                    coordinates={activeCoords}
+                    accuracyMeters={activeAccuracy}
+                    locationSource={activeSource}
+                    onCoordinatesChange={handleCoordinatesChange}
+                    onDetectLocation={handleDetectGPS}
+                    isDetectingGPS={isDetecting}
+                    className="w-full h-full"
+                    enableSearch={true}
+                  />
 
-                  <h3 className="text-sm font-bold text-[var(--text-primary)]">
-                    {detectionStatus.step === "gps" && "Requesting GPS Satellite Lock..."}
-                    {detectionStatus.step === "reverse" && "Identifying Society & Street Name..."}
-                    {detectionStatus.step === "store" && "Connecting to Nearest Express Hub..."}
-                    {detectionStatus.step === "complete" && "Location Verified Successfully!"}
-                  </h3>
-                  <p className="text-xs text-[var(--text-secondary)] mt-1">
-                    {detectionStatus.step === "gps" && "Accessing high-accuracy device coordinates"}
-                    {detectionStatus.step === "reverse" && "Resolving postal locality and doorstep landmark"}
-                    {detectionStatus.step === "store" && "Checking instant dark store inventory & speed ETA"}
-                    {detectionStatus.step === "complete" && "Opening doorstep delivery address form..."}
-                  </p>
-
-                  {/* Live Coordinates Badge */}
-                  {detectionStatus.coords && (
-                    <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white dark:bg-neutral-800 text-[11px] font-mono font-medium text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 shadow-xs">
-                      <Radio className="h-3 w-3 animate-pulse text-[#0c831f]" />
-                      <span>
-                        {detectionStatus.coords.latitude.toFixed(4)}° N, {detectionStatus.coords.longitude.toFixed(4)}° E
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Step Progression Checklist */}
-                <div className="space-y-2.5 p-3.5 rounded-xl bg-gray-50/90 dark:bg-neutral-850/60 border border-[var(--border)]">
-                  {/* Step 1: GPS Lock */}
-                  <div className="flex items-center gap-2.5 text-xs">
-                    <div
-                      className={`flex h-6 w-6 items-center justify-center rounded-full shrink-0 transition-all ${
-                        detectionStatus.coords
-                          ? "bg-[#0c831f] text-white"
-                          : "bg-emerald-100 dark:bg-emerald-950/60 text-[#0c831f]"
-                      }`}
-                    >
-                      {detectionStatus.coords ? (
-                        <Check className="h-3.5 w-3.5 stroke-[3]" />
-                      ) : (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-[var(--text-primary)]">GPS Device Coordinates</p>
-                      <p className="text-[10px] text-[var(--text-muted)] truncate">
-                        {detectionStatus.coords
-                          ? "Satellite signal locked"
-                          : "Requesting browser permission..."}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Step 2: Locality Reverse Geocode */}
-                  <div className="flex items-center gap-2.5 text-xs">
-                    <div
-                      className={`flex h-6 w-6 items-center justify-center rounded-full shrink-0 transition-all ${
-                        detectionStatus.addressTitle
-                          ? "bg-[#0c831f] text-white"
-                          : detectionStatus.step === "reverse"
-                          ? "bg-emerald-100 dark:bg-emerald-950/60 text-[#0c831f]"
-                          : "bg-gray-200 dark:bg-neutral-800 text-gray-400"
-                      }`}
-                    >
-                      {detectionStatus.addressTitle ? (
-                        <Check className="h-3.5 w-3.5 stroke-[3]" />
-                      ) : detectionStatus.step === "reverse" ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <span className="text-[10px] font-bold">2</span>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-[var(--text-primary)]">Doorstep Locality</p>
-                      <p className="text-[10px] text-[var(--text-muted)] truncate">
-                        {detectionStatus.addressTitle || "Resolving street & society details..."}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Step 3: Express Dark Store */}
-                  <div className="flex items-center gap-2.5 text-xs">
-                    <div
-                      className={`flex h-6 w-6 items-center justify-center rounded-full shrink-0 transition-all ${
-                        detectionStatus.step === "complete"
-                          ? "bg-[#0c831f] text-white"
-                          : detectionStatus.step === "store"
-                          ? "bg-emerald-100 dark:bg-emerald-950/60 text-[#0c831f]"
-                          : "bg-gray-200 dark:bg-neutral-800 text-gray-400"
-                      }`}
-                    >
-                      {detectionStatus.step === "complete" ? (
-                        <Check className="h-3.5 w-3.5 stroke-[3]" />
-                      ) : detectionStatus.step === "store" ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <span className="text-[10px] font-bold">3</span>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-[var(--text-primary)]">Nearest Dark Store & ETA</p>
-                      <p className="text-[10px] text-[var(--text-muted)] truncate">
-                        {detectionStatus.storeName
-                          ? `${detectionStatus.storeName} (${detectionStatus.etaMinutes || 8} mins)`
-                          : "Checking nearest express fulfillment hub..."}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Cancel Detection Button */}
-                <div className="text-center pt-1">
                   <button
                     type="button"
-                    onClick={() => {
-                      setIsLocating(false);
-                      setDetectionStatus({ step: "idle" });
-                    }}
-                    className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] underline cursor-pointer"
+                    onClick={handleDetectGPS}
+                    disabled={isDetecting}
+                    className="absolute bottom-2.5 left-1/2 -translate-x-1/2 inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full bg-white/95 backdrop-blur text-[#0c831f] text-xs font-bold shadow-lg shadow-black/10 ring-1 ring-black/5 active:scale-95 transition disabled:opacity-70"
                   >
-                    Cancel detection
+                    {isDetecting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Navigation className="h-3.5 w-3.5" />
+                    )}
+                    {isDetecting ? "Locating..." : "Use current location"}
                   </button>
                 </div>
-              </div>
-            ) : detectionStatus.step === "error" ? (
-              /* Error State View with Retry / Manual Input */
-              <div className="p-4 rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/50 dark:bg-rose-950/20 space-y-3 text-center">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900/50 text-rose-600 dark:text-rose-400 mx-auto">
-                  <AlertCircle className="h-5 w-5" />
-                </div>
-                <div className="space-y-1">
-                  <h4 className="text-xs font-bold text-rose-900 dark:text-rose-200">
-                    Location Detection Failed
-                  </h4>
-                  <p className="text-[11px] text-rose-700 dark:text-rose-300">
-                    {detectionStatus.errorMessage || "Could not retrieve GPS location."}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 pt-1 justify-center">
-                  <Button
-                    size="sm"
-                    onClick={handleDetectLocation}
-                    className="h-8 bg-[#0c831f] hover:bg-[#0a6f1a] text-white text-xs font-semibold rounded-lg"
-                  >
-                    Try Again
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleAddNewAddress}
-                    className="h-8 text-xs font-semibold rounded-lg"
-                  >
-                    Enter Address Manually
-                  </Button>
+
+                {/* Approximate-location notice */}
+                {activeSource === "ip_location" && (
+                  <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-3 text-xs text-amber-800 dark:text-amber-300">
+                    <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <p>
+                      We found you near <strong>{addressDetails.city || "your city"}</strong>. Drag the
+                      pin to your exact building.
+                    </p>
+                  </div>
+                )}
+
+
+
+                {/* Selected address */}
+                <div className="rounded-3xl border border-emerald-100 dark:border-emerald-900/50 bg-gradient-to-br from-emerald-50 via-white to-white dark:from-emerald-950/30 dark:to-neutral-900 p-4 shadow-md shadow-emerald-900/5">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white dark:bg-emerald-950/60 text-[#0c831f] shadow-sm ring-1 ring-emerald-100 dark:ring-emerald-900/50">
+                      {isReverseGeocoding ? (
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                      ) : (
+                        <MapPin className="h-5 w-5" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="truncate text-base font-extrabold text-neutral-900 dark:text-neutral-100">
+                        {isReverseGeocoding
+                          ? "Finding address..."
+                          : addressDetails.area || addressDetails.locality || "Pinned location"}
+                      </h4>
+                      <p className="mt-0.5 text-xs leading-snug text-neutral-600 dark:text-neutral-400">
+                        {addressDetails.fullAddress || "Select a spot on the map to see your address."}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Address breakdown */}
+                  {detailRows.length > 0 && (
+                    <dl className="mt-3 grid grid-cols-2 gap-2">
+                      {detailRows.map((row) => (
+                        <div key={row.label} className="min-w-0 rounded-2xl bg-white dark:bg-neutral-800/70 px-3 py-2 ring-1 ring-black/5 shadow-sm">
+                          <dt className="text-[10px] font-semibold text-neutral-400">{row.label}</dt>
+                          <dd className="truncate text-sm font-bold text-neutral-800 dark:text-neutral-200">
+                            {row.value}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
+
+                  {/* Delivery info */}
+                  {isServiceable === false ? (
+                    <div className="mt-3 flex items-center gap-2 rounded-2xl bg-red-50 dark:bg-red-950/40 px-3 py-2 text-xs font-semibold text-red-600">
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                      We don&apos;t deliver to this spot yet. Try moving the pin.
+                    </div>
+                  ) : (
+                    (etaMinutes || storeName) && (
+                      <div className="mt-3 flex items-center justify-between gap-2 rounded-2xl bg-gradient-to-r from-[#0c831f] to-[#16a02c] px-4 py-3 text-white shadow-lg shadow-emerald-700/25">
+                        <div className="flex items-center gap-1.5 text-sm font-extrabold">
+                          <Zap className="h-4 w-4 fill-current" />
+                          {etaMinutes ? `Delivery in ${etaMinutes} mins` : "Express delivery"}
+                        </div>
+                        <div className="flex items-center gap-1.5 min-w-0 text-[11px] font-medium text-emerald-50">
+                          <Store className="h-3 w-3 shrink-0" />
+                          <span className="truncate">
+                            {storeName || "Nearest store"}
+                            {typeof storeDistanceKm === "number" && ` · ${storeDistanceKm.toFixed(1)} km`}
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  )}
                 </div>
               </div>
             ) : (
-              /* Normal Idle View */
-              <>
-                {/* GPS Auto-Detect Button */}
-                <div className="space-y-1.5">
-                  <Button
-                    onClick={handleDetectLocation}
-                    disabled={isLocating}
-                    className="w-full h-11 bg-[#0c831f] hover:bg-[#0a6f1a] text-white flex items-center justify-center gap-2 font-bold text-xs sm:text-sm shadow-sm transition-all active:scale-[0.99] cursor-pointer rounded-xl"
-                  >
-                    <Navigation className="h-4 w-4 fill-white/20" />
-                    <span>Detect Current Location</span>
-                  </Button>
-                  <p className="text-[11px] text-[var(--text-muted)] text-center">
-                    Using device GPS for precise doorstep delivery
-                  </p>
-                </div>
+              /* Saved addresses */
+              <div className="px-4 pb-4 space-y-3">
+                {savedAddresses.map((addr) => {
+                  const isSelected =
+                    currentLocation.id === addr.id ||
+                    (currentLocation.coordinates?.latitude === Number(addr.latitude) &&
+                      currentLocation.coordinates?.longitude === Number(addr.longitude));
+                  const isWork = addr.address_type === "WORK";
 
-                {/* Saved Addresses Section */}
-                <div className="pt-3 border-t border-[var(--border)] space-y-2.5">
-                  <div className="flex items-center justify-between px-0.5">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-primary)]">
-                      <Bookmark className="h-3.5 w-3.5 text-[#0c831f]" />
-                      <span>Saved Addresses</span>
-                      {savedAddresses.length > 0 && (
-                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-100 text-[#0c831f] dark:bg-emerald-950/50">
-                          {savedAddresses.length}
-                        </span>
-                      )}
-                    </div>
+                  return (
                     <button
+                      key={addr.id}
                       type="button"
-                      onClick={handleAddNewAddress}
-                      className="text-[11px] font-bold text-[#0c831f] hover:underline flex items-center gap-0.5 cursor-pointer"
+                      onClick={() => handleSelectSavedAddress(addr)}
+                      className={`w-full flex items-start gap-3 rounded-3xl border p-4 text-left shadow-sm transition-all ${isSelected
+                        ? "border-[#0c831f] bg-emerald-50/70 dark:bg-emerald-950/30 shadow-sm shadow-emerald-700/10"
+                        : "border-[var(--border)] hover:bg-neutral-50 dark:hover:bg-neutral-900"
+                        }`}
                     >
-                      <Plus className="h-3 w-3" />
-                      <span>Add New</span>
-                    </button>
-                  </div>
-
-                  {isLoadingAddresses ? (
-                    <div className="p-6 text-center text-xs text-[var(--text-muted)] flex items-center justify-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin text-[#0c831f]" />
-                      <span>Loading saved addresses...</span>
-                    </div>
-                  ) : savedAddresses.length > 0 ? (
-                    <div className="space-y-2 max-h-60 overflow-y-auto pr-0.5">
-                      {savedAddresses.map((addr) => {
-                        const isHome = addr.address_type === "HOME";
-                        const isWork = addr.address_type === "WORK";
-                        const isSelected =
-                          currentLocation.id === addr.id ||
-                          (currentLocation as any).savedAddressId === addr.id ||
-                          (currentLocation.houseNo &&
-                            addr.address_line_1?.toLowerCase().trim() ===
-                              currentLocation.houseNo?.toLowerCase().trim());
-
-                        return (
-                          <div
-                            key={addr.id}
-                            onClick={() => handleSelectSavedAddress(addr)}
-                            className={`group flex items-start gap-2.5 p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                              isSelected
-                                ? "border-[#0c831f] bg-emerald-50/40 dark:bg-emerald-950/20 shadow-xs ring-1 ring-[#0c831f]/20"
-                                : "border-[var(--border)] bg-[var(--surface)] hover:border-[#0c831f]/40 hover:bg-gray-50/70 dark:hover:bg-neutral-800/50"
-                            }`}
-                          >
-                            {/* Type Icon */}
-                            <div
-                              className={`flex h-8 w-8 items-center justify-center rounded-xl shrink-0 mt-0.5 ${
-                                isHome
-                                  ? "bg-blue-50 text-blue-600 dark:bg-blue-950/40"
-                                  : isWork
-                                  ? "bg-amber-50 text-amber-600 dark:bg-amber-950/40"
-                                  : "bg-emerald-50 text-[#0c831f] dark:bg-emerald-950/40"
-                              }`}
-                            >
-                              {isHome ? (
-                                <Home className="h-4 w-4" />
-                              ) : isWork ? (
-                                <Briefcase className="h-4 w-4" />
-                              ) : (
-                                <MapPin className="h-4 w-4" />
-                              )}
-                            </div>
-
-                            {/* Address Details */}
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="text-xs font-black text-[var(--text-primary)]">
-                                  {addr.address_type || "HOME"}
-                                </span>
-                                {addr.is_default && (
-                                  <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-gray-300">
-                                    Default
-                                  </span>
-                                )}
-                                {isSelected && (
-                                  <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-emerald-100 text-[#0c831f] dark:bg-emerald-950/50 ml-auto flex items-center gap-0.5">
-                                    <Check className="h-2.5 w-2.5" />
-                                    Selected
-                                  </span>
-                                )}
-                              </div>
-
-                              <p className="text-xs font-semibold text-[var(--text-secondary)] mt-0.5 truncate">
-                                {addr.recipient_name}
-                                {addr.recipient_phone ? ` • ${addr.recipient_phone}` : ""}
-                              </p>
-                              <p className="text-[11px] text-[var(--text-muted)] line-clamp-2 mt-0.5 leading-snug">
-                                {[
-                                  addr.address_line_1,
-                                  addr.address_line_2,
-                                  addr.landmark,
-                                  addr.area_name,
-                                  addr.city_name,
-                                  addr.pincode,
-                                ]
-                                  .filter(Boolean)
-                                  .join(", ")}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    /* Empty state when no saved addresses */
-                    <div className="rounded-xl border border-dashed border-[var(--border)] p-4 text-center space-y-2 bg-[var(--surface-secondary)]/30">
-                      <p className="text-xs font-medium text-[var(--text-secondary)]">
-                        {isAuthenticated
-                          ? "You haven't saved any doorstep addresses yet."
-                          : "Sign in to view and save delivery addresses for 1-tap checkout."}
-                      </p>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={isAuthenticated ? handleAddNewAddress : handleLoginClick}
-                        className="text-xs font-bold text-[#0c831f] border-[#0c831f]/30 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 cursor-pointer"
+                      <div
+                        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${isSelected
+                          ? "bg-[#0c831f] text-white"
+                          : "bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300"
+                          }`}
                       >
-                        <Plus className="h-3.5 w-3.5 mr-1" />
-                        <span>
-                          {isAuthenticated ? "Add Delivery Address" : "Sign In to View Addresses"}
-                        </span>
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </>
+                        {isWork ? <Briefcase className="h-4 w-4" /> : <Home className="h-4 w-4" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-base font-extrabold text-neutral-900 dark:text-neutral-100">
+                            {isWork ? "Work" : "Home"}
+                          </span>
+                          {addr.is_default && (
+                            <span className="rounded-full bg-neutral-100 dark:bg-neutral-800 px-2 py-0.5 text-[11px] font-semibold text-neutral-600 dark:text-neutral-300">
+                              Default
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-0.5 line-clamp-2 text-xs text-neutral-600 dark:text-neutral-400">
+                          {[addr.address_line_1, addr.address_line_2, addr.landmark, addr.city_name, addr.pincode]
+                            .filter(Boolean)
+                            .join(", ")}
+                        </p>
+                        {(addr.recipient_name || addr.recipient_phone) && (
+                          <p className="mt-1.5 flex items-center gap-1.5 text-[11px] font-medium text-neutral-500">
+                            <Phone className="h-3 w-3 shrink-0" />
+                            <span className="truncate">
+                              {[addr.recipient_name, addr.recipient_phone].filter(Boolean).join(" · ")}
+                            </span>
+                          </p>
+                        )}
+                      </div>
+                      {isSelected && <CheckCircle2 className="mt-1 h-5 w-5 shrink-0 text-[#0c831f]" />}
+                    </button>
+                  );
+                })}
+              </div>
             )}
           </div>
+
+          {/* Sticky footer (map view only) */}
+          {viewMode === "map" && (
+            <div className="shrink-0 border-t border-[var(--border)] bg-[var(--surface)] px-4 py-3 space-y-1">
+              <Button
+                type="button"
+                onClick={handleConfirmLocation}
+                disabled={isConfirmingLocation || isReverseGeocoding}
+                className="w-full h-12 rounded-2xl bg-gradient-to-r from-[#0c831f] to-[#16a02c] hover:brightness-95 text-white font-bold text-sm shadow-lg shadow-emerald-700/25 active:scale-[0.99] transition disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {isConfirmingLocation ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Saving location...
+                  </>
+                ) : (
+                  <>
+                    <Check className="h-4 w-4 stroke-[3]" />
+                    Confirm location
+                  </>
+                )}
+              </Button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOpen(false);
+                  setIsAddressModalOpen(true);
+                }}
+                className="w-full inline-flex items-center justify-center gap-1.5 h-9 rounded-xl text-xs font-semibold text-[#0c831f] hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors"
+              >
+                <Plus className="h-4 w-4" />
+                Add house or flat details
+              </button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
-      {/* Add / Save Doorstep Delivery Address Modal */}
-      <AddressModal
-        isOpen={isAddressModalOpen}
-        onClose={() => {
-          setIsAddressModalOpen(false);
-          setDetectedLocationData(null);
-        }}
-        detectedLocation={detectedLocationData}
-        onSave={handleSaveNewAddress}
-        isSaving={createAddressMutation.isPending}
-      />
+      {/* Doorstep Address Modal for saving flat/house number if user wishes */}
+      {isAddressModalOpen && (
+        <AddressModal
+          isOpen={isAddressModalOpen}
+          onClose={() => setIsAddressModalOpen(false)}
+          onSave={async (data) => {
+            setIsAddressModalOpen(false);
+            setIsOpen(false);
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.USER.ADDRESSES() });
+            toast.success("Doorstep details saved successfully!");
+          }}
+          detectedLocation={{
+            ...currentLocation,
+            coordinates: activeCoords,
+            accuracy: activeAccuracy,
+            locationSource: activeSource,
+            formattedAddress: addressDetails.fullAddress || currentLocation.formattedAddress,
+            city: addressDetails.city || currentLocation.city,
+            state: addressDetails.state || currentLocation.state,
+            pincode: addressDetails.postalCode || currentLocation.pincode,
+          }}
+        />
+      )}
     </>
   );
 }

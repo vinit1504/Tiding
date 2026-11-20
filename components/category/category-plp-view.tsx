@@ -16,6 +16,7 @@ import {
   useCategoriesQuery,
   useInfiniteSubcategoriesQuery,
   useCatalogProductsQuery,
+  useInfiniteCatalogProductsQuery,
 } from "@/queries/catalog";
 import { useStoreInventoryQuery } from "@/queries/inventory";
 import { isUuid } from "@/lib/api/catalog-service";
@@ -52,6 +53,7 @@ export function CategoryPlpView({
   const [showTop, setShowTop] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
   // 1. Fetch categories to resolve real backend UUID if current category only has a slug
   const { data: allCategories } = useCategoriesQuery();
@@ -140,17 +142,27 @@ export function CategoryPlpView({
 
   const { data: inventoryData } = useStoreInventoryQuery(storeId);
 
-  // 4. Fetch products
-  const { data: rawProducts, isLoading: isProductsLoading } = useCatalogProductsQuery({
+  // 4. Fetch products with default 50 items and auto-scroll pagination
+  const {
+    data: infiniteProductsData,
+    isLoading: isProductsLoading,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  } = useInfiniteCatalogProductsQuery({
     categoryId: categoryUuid,
     category_id: categoryUuid,
     subcategoryId: subcategoryUuid,
     subcategory_id: subcategoryUuid,
     storeId: storeId,
     store_id: storeId,
-    page: 1,
-    limit: 20,
+    limit: 50,
   });
+
+  const rawProducts = useMemo(() => {
+    if (!infiniteProductsData?.pages) return [];
+    return infiniteProductsData.pages.flatMap((page) => page.data);
+  }, [infiniteProductsData]);
 
   // 5. Map products directly from API response
   const products: Product[] = useMemo(() => {
@@ -247,7 +259,7 @@ export function CategoryPlpView({
     panelRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }, [activeSubcategory?.id]);
 
-  // Scroll handler: compact header, back-to-top button, progress line
+  // Scroll handler: compact header, back-to-top button, progress line, and auto-fetch next page on scroll
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
     const isScrolled = el.scrollTop > 12;
@@ -255,12 +267,40 @@ export function CategoryPlpView({
     setScrolled((prev) => (prev === isScrolled ? prev : isScrolled));
     setShowTop((prev) => (prev === isFar ? prev : isFar));
 
+    // Auto-call API for next page of products when scrolling near bottom
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 400) {
+      if (hasNextPage && !isFetchingNextPage) {
+        fetchNextPage();
+      }
+    }
+
     // Update the progress line without re-rendering the cards
     const max = el.scrollHeight - el.clientHeight;
     if (progressRef.current) {
       progressRef.current.style.transform = `scaleX(${max > 0 ? el.scrollTop / max : 0})`;
     }
   };
+
+  // IntersectionObserver to auto-fetch next page when scrolling sentinel into view
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      },
+      {
+        root: panelRef.current,
+        rootMargin: "300px",
+      }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const [headerHeight, setHeaderHeight] = React.useState(75);
 
@@ -439,8 +479,25 @@ export function CategoryPlpView({
                   ))}
                 </div>
 
-                {/* End of list (only for longer lists) */}
-                {displayProducts.length >= 8 && (
+                {/* Auto-scroll Sentinel */}
+                <div ref={sentinelRef} className="h-6 w-full pointer-events-none" />
+
+                {/* Skeletons while auto-fetching next page on scroll */}
+                {isFetchingNextPage && (
+                  <div className="mt-4 space-y-3">
+                    <div className={gridClass}>
+                      {Array.from({ length: 7 }).map((_, i) => (
+                        <ProductCardSkeleton key={`next-page-skeleton-${i}`} />
+                      ))}
+                    </div>
+                    <p className="text-center text-xs font-semibold text-[#18A818] animate-pulse">
+                      Loading next page products...
+                    </p>
+                  </div>
+                )}
+
+                {/* End of list (when all pages are fetched) */}
+                {!hasNextPage && displayProducts.length >= 8 && (
                   <div className="mt-10 flex flex-col items-center gap-1.5 text-center">
                     <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#18A818]/10 text-[#18A818]">
                       <CheckCircle2 className="h-5 w-5" />

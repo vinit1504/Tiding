@@ -9,13 +9,19 @@ interface CacheEntry<T> {
 
 interface BaseGeocodedAddress {
   area: string;
+  locality: string;
   society: string;
   houseNo: string;
+  street: string;
+  road: string;
   landmark: string;
   formattedAddress: string;
+  fullAddress: string;
   city: string;
   state: string;
+  country: string;
   pincode: string;
+  postalCode: string;
   coordinates: {
     latitude: number;
     longitude: number;
@@ -313,15 +319,27 @@ function parseBlinkitStyleAddress(
     });
   }
 
+  const street = isCleanString(addr.road || addr.street || addr.pedestrian)
+    ? (addr.road || addr.street || addr.pedestrian).trim()
+    : landmark;
+  const road = isCleanString(addr.road) ? addr.road.trim() : street;
+  const country = isCleanString(addr.country) ? addr.country.trim() : "India";
+
   return {
     area,
+    locality: locality || area,
     society, // Actual society name when available, otherwise empty string
     houseNo,
+    street,
+    road,
     landmark,
     formattedAddress,
+    fullAddress: formattedAddress,
     city,
     state,
+    country,
     pincode,
+    postalCode: pincode,
     coordinates: {
       latitude: lat,
       longitude: lng,
@@ -513,13 +531,19 @@ export async function GET(request: NextRequest) {
             // BigDataCloud client does NOT provide society/building data; never use city/subdivision as society
             baseGeocode = {
               area: locality || city || "Detected Location",
+              locality: locality || city || "Detected Location",
               society: "", // Empty string as per requirements
               houseNo: "",
+              street: locality || "",
+              road: "",
               landmark: "",
               formattedAddress: `${locality ? `${locality}, ` : ""}${city ? `${city}, ` : ""}${state} ${pincode}`.trim(),
+              fullAddress: `${locality ? `${locality}, ` : ""}${city ? `${city}, ` : ""}${state} ${pincode}`.trim(),
               city,
               state,
+              country: isCleanString(bdc.countryName) ? bdc.countryName.trim() : "India",
               pincode,
+              postalCode: pincode,
               coordinates: { latitude: lat, longitude: lng },
             };
           }
@@ -534,13 +558,19 @@ export async function GET(request: NextRequest) {
       if (!baseGeocode) {
         baseGeocode = {
           area: "Detected Location",
+          locality: "Detected Location",
           society: "",
           houseNo: "",
+          street: "",
+          road: "",
           landmark: "",
           formattedAddress: `Lat: ${lat.toFixed(4)}, Lon: ${lng.toFixed(4)}`,
+          fullAddress: `Lat: ${lat.toFixed(4)}, Lon: ${lng.toFixed(4)}`,
           city: "",
           state: "",
+          country: "India",
           pincode: "",
+          postalCode: "",
           coordinates: { latitude: lat, longitude: lng },
         };
       }

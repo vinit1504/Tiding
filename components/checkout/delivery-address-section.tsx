@@ -117,14 +117,21 @@ export function DeliveryAddressSection({
         });
         setAddressToEdit(null);
         setIsAddOpen(true);
-        toast.success("Location locked! Pinning your address...");
+        const accuracy = Math.round(pos.coords.accuracy);
+        toast.success(`Location locked (±${accuracy}m)! Pinning your address...`);
       },
-      () => {
+      (err) => {
         setIsLocating(false);
-        toast.info("Could not detect GPS. Please select location on map.");
+        let msg = "Could not detect GPS. Opening map picker...";
+        if (err.code === err.PERMISSION_DENIED) {
+          msg = "Location permission denied. Please pick on the map.";
+        } else if (err.code === err.TIMEOUT) {
+          msg = "GPS request timed out. Please pick on the map.";
+        }
+        toast.info(msg);
         handleOpenAdd();
       },
-      { enableHighAccuracy: true, timeout: 8000 }
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
     );
   };
 
