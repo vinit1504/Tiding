@@ -339,6 +339,10 @@ export function CategoryPlpView({
   ).length;
   const inStockCount = displayProducts.length - outOfStockCount;
 
+  const isProductsContentLoading =
+    isProductsLoading ||
+    (displayProducts.length === 0 && (!categoryUuid || isSubcategoriesLoading));
+
   // 7 cards per row on desktop (lg+), with reduced space between cards to eliminate dead space
   const gridClass =
     "grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2 md:grid-cols-4 md:gap-2 lg:grid-cols-7 gap-y-3 sm:gap-y-3.5 [&>*]:min-w-0";
@@ -354,7 +358,7 @@ export function CategoryPlpView({
           subcategories={subcategories}
           selectedSubcategoryId={activeSubcategory?.slug || activeSubcategory?.id}
           onSelectSubcategory={handleSelectSubcategory}
-          isLoading={isSubcategoriesLoading}
+          isLoading={isSubcategoriesLoading || !categoryUuid || subcategories.length === 0}
           hasNextPage={hasSubcategoriesNextPage}
           isFetchingNextPage={isFetchingSubcategoriesNextPage}
           onLoadMore={fetchNextSubcategoriesPage}
@@ -465,7 +469,7 @@ export function CategoryPlpView({
             </div>
 
             {/* PRODUCT GRID */}
-            {isProductsLoading ? (
+            {isProductsContentLoading ? (
               <div className={gridClass}>
                 {Array.from({ length: 14 }).map((_, i) => (
                   <ProductCardSkeleton key={i} />

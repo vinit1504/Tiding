@@ -2,6 +2,7 @@ import React, { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { catalogService } from "@/lib/api/catalog-service";
 import { CategoryPlpView } from "@/components/category/category-plp-view";
+import { CategoryPlpSkeleton } from "@/components/category/category-plp-skeleton";
 import { BreadcrumbJsonLd } from "@/components/seo/breadcrumb-json-ld";
 import { SITE_CONFIG } from "@/lib/constants/site-config";
 import { CatalogCategory } from "@/types/catalog";
@@ -55,13 +56,7 @@ export default async function CategoryPage({
         ]}
       />
 
-      <Suspense
-        fallback={
-          <div className="flex h-screen items-center justify-center">
-            <div className="h-8 w-8 rounded-full border-2 border-[#18A818] border-t-transparent animate-spin" />
-          </div>
-        }
-      >
+      <Suspense fallback={<CategoryPlpSkeleton />}>
         <CategoryPlpView
           category={category}
           initialSubcategories={[]}

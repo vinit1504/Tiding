@@ -82,6 +82,11 @@ export function CategoryNavBar() {
               <button
                 key={category.id}
                 onClick={() => handleCategoryClick(category.slug, category.id)}
+                onMouseEnter={() => {
+                  if (category.slug !== "all") {
+                    router.prefetch(`/category/${category.slug}`);
+                  }
+                }}
                 className={cn(
                   "flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-150 cursor-pointer shrink-0 select-none",
                   isActive
