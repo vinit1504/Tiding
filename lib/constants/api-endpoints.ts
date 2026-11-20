@@ -41,6 +41,23 @@ export const API_ENDPOINTS = {
     SEARCH_PINCODE: "/location/pincodes",
     AREAS_BY_PINCODE: (pincode: string) => `/location/areas?search=${pincode}`,
     GEOCODE: "/location/geocode",
+    // Customer location endpoints
+    BASE: "/locations",
+    REVERSE_GEOCODE: (latitude: number | string, longitude: number | string) =>
+      `/locations/reverse-geocode?latitude=${latitude}&longitude=${longitude}`,
+    IP_LOOKUP: "/locations/ip-lookup",
+    SAVE: "/locations",
+    LIST: (page: number = 1, limit: number = 20) => `/locations?page=${page}&limit=${limit}`,
+    DETAIL: (id: string) => `/locations/${id}`,
+  },
+  LOCATIONS: {
+    BASE: "/locations",
+    REVERSE_GEOCODE: (latitude: number | string, longitude: number | string) =>
+      `/locations/reverse-geocode?latitude=${latitude}&longitude=${longitude}`,
+    IP_LOOKUP: "/locations/ip-lookup",
+    SAVE: "/locations",
+    LIST: (page: number = 1, limit: number = 20) => `/locations?page=${page}&limit=${limit}`,
+    DETAIL: (id: string) => `/locations/${id}`,
   },
   CATALOG: {
     CATEGORIES: "/catalog/categories",

@@ -107,7 +107,14 @@ class ApiClient {
     }
 
     try {
-      const res = await fetch(`${this.baseUrl}${endpoint}`, {
+      const url =
+        endpoint.startsWith("http://") || endpoint.startsWith("https://")
+          ? endpoint
+          : endpoint.startsWith("/api/")
+          ? endpoint
+          : `${this.baseUrl}${endpoint}`;
+
+      const res = await fetch(url, {
         ...init,
         headers,
         credentials: "include", // Required for cross-origin cookie authentication

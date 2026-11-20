@@ -32,6 +32,7 @@ import { useAtomValue } from "jotai";
 import { deliveryLocationAtom } from "@/stores";
 import { useAuth } from "@/hooks/use-auth";
 import type { MapLocationResult } from "@/components/location/interactive-map";
+import { AccuracyIndicator } from "@/components/location/accuracy-indicator";
 import { AddressCardData } from "./delivery-address-section";
 
 // Dynamically import InteractiveMap (Leaflet client-side only)
@@ -87,6 +88,8 @@ export function AddAddressDialog({
   };
 
   const [coords, setCoords] = useState(defaultCoords);
+  const [accuracy, setAccuracy] = useState<number>(location.accuracy || 25);
+  const [locationSource, setLocationSource] = useState<any>(location.locationSource || "manual_pin");
   const [addressType, setAddressType] = useState<"HOME" | "WORK" | "OTHER">("HOME");
   const [recipientName, setRecipientName] = useState("");
   const [recipientPhone, setRecipientPhone] = useState("");
@@ -158,6 +161,8 @@ export function AddAddressDialog({
   const handleMapLocationSelect = useCallback(
     (result: MapLocationResult) => {
       setCoords(result.coordinates);
+      if (result.accuracy) setAccuracy(result.accuracy);
+      if (result.locationSource) setLocationSource(result.locationSource);
 
       if (result.city) setCity(result.city);
       if (result.state) setState(result.state);
@@ -222,14 +227,22 @@ export function AddAddressDialog({
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const { latitude, longitude } = pos.coords;
+        const { latitude, longitude, accuracy: acc } = pos.coords;
         setCoords({ latitude, longitude });
-        toast.success("Current location detected!");
+        setAccuracy(Math.round(acc));
+        setLocationSource(acc <= 30 ? "browser_gps" : "browser_approximate");
+        toast.success(`Current location detected (±${Math.round(acc)}m)!`);
       },
-      () => {
-        toast.error("Could not access GPS. Please pin your location on the map.");
+      (err) => {
+        let msg = "Could not access GPS. Please pin your location on the map.";
+        if (err.code === err.PERMISSION_DENIED) {
+          msg = "Location permission denied. Please allow location access or pin on map.";
+        } else if (err.code === err.TIMEOUT) {
+          msg = "Location detection timed out. Please pin on map.";
+        }
+        toast.error(msg);
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
     );
   };
 
@@ -419,13 +432,22 @@ export function AddAddressDialog({
             </form>
 
             {/* Map Container */}
-            <div className="w-full flex-1 min-h-[320px] sm:min-h-[380px] rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-700 shadow-sm relative">
+            <div className="w-full flex-1 min-h-[300px] sm:min-h-[340px] rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-700 shadow-sm relative">
               <InteractiveMap
                 initialCoordinates={coords}
+                accuracyMeters={accuracy}
+                locationSource={locationSource}
                 onLocationSelect={handleMapLocationSelect}
-                className="w-full h-full min-h-[320px] sm:min-h-[380px]"
+                className="w-full h-full min-h-[300px] sm:min-h-[340px]"
               />
             </div>
+
+            {/* Accuracy Indicator */}
+            <AccuracyIndicator
+              accuracyMeters={accuracy}
+              locationSource={locationSource}
+              compact={false}
+            />
           </div>
 
           {/* Right Column: Complete Address Details Form */}

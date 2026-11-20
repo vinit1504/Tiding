@@ -341,7 +341,7 @@ class CatalogService {
   async getProducts(params?: GetCatalogProductsParams): Promise<CatalogProduct[]> {
     const query = new URLSearchParams();
     query.append("page", String(params?.page || 1));
-    query.append("limit", String(params?.limit || 20));
+    query.append("limit", String(params?.limit || 50));
     if (params?.search) query.append("search", params.search);
     if (params?.food_preference) query.append("food_preference", params.food_preference);
     
@@ -398,6 +398,113 @@ class CatalogService {
       return [];
     } catch {
       return [];
+    }
+  }
+
+  /**
+   * Fetch paginated products with metadata from backend API
+   * GET /api/v1/catalog/products?page=...&limit=50
+   */
+  async getProductsPaginated(
+    params?: GetCatalogProductsParams
+  ): Promise<{
+    data: CatalogProduct[];
+    meta?: {
+      pagination?: {
+        page: number;
+        limit: number;
+        totalItems?: number;
+        totalPages?: number;
+        hasNextPage?: boolean;
+        hasPreviousPage?: boolean;
+      };
+    };
+  }> {
+    const page = params?.page || 1;
+    const limit = params?.limit || 50;
+
+    const query = new URLSearchParams();
+    query.append("page", String(page));
+    query.append("limit", String(limit));
+    if (params?.search) query.append("search", params.search);
+    if (params?.food_preference) query.append("food_preference", params.food_preference);
+
+    const catId = params?.categoryId || params?.category_id;
+    if (catId && isUuid(catId)) {
+      query.append("categoryId", catId);
+    }
+    const subCatId = params?.subcategoryId || params?.subcategory_id;
+    if (subCatId && isUuid(subCatId)) {
+      query.append("subcategoryId", subCatId);
+    }
+    const brId = params?.brandId || params?.brand_id;
+    if (brId && isUuid(brId)) {
+      query.append("brandId", brId);
+    }
+    const stId = params?.storeId || params?.store_id;
+    if (stId && isUuid(stId)) {
+      query.append("storeId", stId);
+    }
+    if (params?.area_id && isUuid(params.area_id)) {
+      query.append("area_id", params.area_id);
+    }
+    if (params?.in_stock_only) query.append("in_stock_only", "true");
+
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+    };
+    if (stId && isUuid(stId)) headers["x-store-id"] = stId;
+    if (params?.area_id && isUuid(params.area_id)) headers["x-area-id"] = params.area_id;
+
+    try {
+      const res = await apiClient.getWithMeta<any[]>(
+        `/catalog/products?${query.toString()}`,
+        { headers }
+      );
+
+      let inventoryMap: Map<string, any> | undefined;
+      if (stId && isUuid(stId)) {
+        try {
+          const { inventoryService } = await import("@/lib/api/inventory-service");
+          inventoryMap = await inventoryService.getInventoryMap(stId);
+        } catch {
+          // ignore
+        }
+      }
+
+      const rawItems = Array.isArray(res.data) ? res.data : [];
+      const normalized = rawItems.map((item) => normalizeProduct(item, inventoryMap));
+
+      const hasNext =
+        res.meta?.pagination?.hasNextPage !== undefined
+          ? Boolean(res.meta.pagination.hasNextPage)
+          : rawItems.length >= limit;
+
+      return {
+        data: normalized,
+        meta: {
+          pagination: {
+            page,
+            limit,
+            totalItems: res.meta?.pagination?.totalItems,
+            totalPages: res.meta?.pagination?.totalPages,
+            hasNextPage: hasNext,
+            hasPreviousPage: page > 1,
+          },
+        },
+      };
+    } catch {
+      return {
+        data: [],
+        meta: {
+          pagination: {
+            page,
+            limit,
+            hasNextPage: false,
+            hasPreviousPage: page > 1,
+          },
+        },
+      };
     }
   }
 
