@@ -517,9 +517,6 @@ export function LocationModal() {
                     </p>
                   </div>
                 )}
-
-
-
                 {/* Selected address */}
                 <div className="rounded-3xl border border-emerald-100 dark:border-emerald-900/50 bg-gradient-to-br from-emerald-50 via-white to-white dark:from-emerald-950/30 dark:to-neutral-900 p-4 shadow-md shadow-emerald-900/5">
                   <div className="flex items-start gap-3">
